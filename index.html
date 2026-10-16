@@ -126,10 +126,35 @@ button:focus-visible, select:focus-visible, textarea:focus-visible, input:focus-
 .hint { margin: 0; font-size: 12px; line-height: 1.5; color: var(--dim); }
 .field { display: grid; grid-template-columns: 74px minmax(0, 1fr) auto; gap: 8px; align-items: center; }
 .field > :first-child { font-size: 12px; color: var(--dim); }
-select {
+select, input[type="text"] {
   width: 100%; min-width: 0; font: 13px var(--font-ui); color: var(--ink); background: var(--well);
   border: 1px solid var(--line); border-radius: 6px; padding: 8px;
 }
+input[type="text"] { font-family: var(--font-code); font-size: 12.5px; }
+input[type="text"]::placeholder { color: var(--dim); opacity: 0.8; }
+.now { font: 11px/1.4 var(--font-code); color: var(--ink); margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.now b { color: var(--flame); font-weight: 400; margin-right: 3px; }
+.sec, .opts { display: grid; gap: 10px; min-width: 0; }
+.sec + .sec { border-top: 1px solid var(--line); padding-top: 12px; }
+.sec h3 { margin: 0; font: 600 11px/1 var(--font-ui); letter-spacing: 0.09em; text-transform: uppercase; color: var(--dim); }
+.seg { display: flex; flex-wrap: wrap; gap: 4px; }
+.seg button {
+  appearance: none; font: 500 12.5px/1 var(--font-ui); color: var(--ink); background: transparent; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 6px; padding: 9px 11px; min-height: 34px;
+}
+.seg button:hover { border-color: var(--line-strong); }
+.seg button[aria-checked="true"] { color: var(--on-flame); background: var(--flame); border-color: var(--flame); }
+.rows { display: grid; gap: 6px; }
+.row { display: grid; grid-template-columns: 74px minmax(0, 1fr) 3.4em; gap: 8px; align-items: center; font: 12px var(--font-code); color: var(--dim); }
+.row input { accent-color: var(--flame); width: 100%; min-width: 0; }
+.row output { color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
+.np { display: grid; gap: 5px; font: 12px/1.45 var(--font-code); }
+.np > div { display: grid; grid-template-columns: 1.2em minmax(0, 1fr) auto; gap: 8px; align-items: baseline; }
+.np .n { color: var(--flame); }
+.np .t { color: var(--dim); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.np a.t[href] { color: var(--ink); text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
+.np a.t[href]:hover { text-decoration-color: var(--flame); }
+.np .tm { color: var(--dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .toast {
   position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 96px); transform: translateX(-50%);
   width: max-content; max-width: min(92vw, 520px); padding: 10px 14px; border-radius: 8px;
@@ -153,8 +178,9 @@ select {
 
 <header class="mast" id="mast">
   <div class="plate ident">
-    <div class="wordmark">nested dimensions<small>v0.1</small></div>
+    <div class="wordmark">nested dimensions<small>v0.2</small></div>
     <div class="readout"><b id="sceneLabel">orbit</b> · <span id="fpsLabel">-- fps</span> · <span id="audioLabel">no audio</span></div>
+    <div class="now" id="nowLine" hidden><b>♪</b><span id="nowTitle"></span></div>
     <div class="presets">
       <span id="presetA">A · loading MilkDrop</span>
       <span id="presetB">B · loading MilkDrop</span>
@@ -189,6 +215,7 @@ select {
         <dt>bass_att, mid_att, treb_att, vol</dt><dd>smoothed bands, and the average of the three</dd>
         <dt>note, vel, onset, held</dt><dd>last MIDI note and velocity (0–1); onset jumps to 1 on each note and fades; notes held</dd>
         <dt>cc1 – cc16</dt><dd>MIDI controller values (0–1)</dd>
+        <dt>track, trackpos, newtrack, lanes</dt><dd>seconds into the newest track, how far through it (0–1), a pulse that jumps to 1 when any track starts and fades, lanes playing</dd>
         <dt>i, n, aspect</dt><dd>plane number (0 MilkDrop A, 1 Stream, 2 MilkDrop B, 3 Nested), plane count, screen width ÷ height</dd>
         <dt>q1 – q8</dt><dd>set in the Camera block, readable in every plane</dd>
         <dt>plane outputs</dt><dd>x y z position · rx ry rz rotation in radians · sx sy scale · a opacity · add 1 for additive glow · bright gain</dd>
@@ -197,28 +224,67 @@ select {
         <dt>syntax</dt><dd>statements end with ; · ^ is power · // starts a comment · any new name is a variable that keeps its value between frames · paste scene JSON here and press Apply to load it</dd>
       </dl>
     </details>
-    <p class="hint" data-artifact>Live audio (BlackHole or a mic), camera (OBS Virtual Camera) and MIDI inputs run in the GitHub Pages version of this page. Here, load an audio or video file.</p>
+    <p class="hint" data-artifact>Archive radio, live audio (BlackHole or a mic), camera (OBS Virtual Camera) and MIDI run in the GitHub Pages version of this page. Here, open Sources to play your own audio files nonstop, or load a video file.</p>
   </section>
 
-  <section class="sheet" id="liveSheet" aria-label="Live inputs" hidden data-standalone>
-    <div class="field"><label for="audioDev">Audio in</label><select id="audioDev"><option value="">Default input</option></select><button class="key" id="audioStart" type="button">Listen</button></div>
-    <div class="field"><label for="videoDev">Video in</label><select id="videoDev"><option value="">Default camera</option></select><button class="key" id="videoStart" type="button">Start</button></div>
-    <div class="field"><span>MIDI</span><span class="status" id="midiStatus">Not connected</span><button class="key" id="midiStart" type="button">Connect</button></div>
-    <p class="hint">On a Mac, choose BlackHole for audio and OBS Virtual Camera for video coming from another app, such as the fractal stream. MIDI listens to every input, IAC buses included, and needs Chrome or Edge. Device names appear after you allow access once.</p>
+  <section class="sheet" id="srcSheet" aria-label="Sources" hidden>
+    <div class="sec">
+      <h3>Audio</h3>
+      <div class="seg" id="srcSeg" role="radiogroup" aria-label="Audio source">
+        <button type="button" role="radio" aria-checked="false" data-mode="radio" data-standalone>Archive radio</button>
+        <button type="button" role="radio" aria-checked="false" data-mode="files">My files</button>
+        <button type="button" role="radio" aria-checked="false" data-mode="live" data-standalone>Live input</button>
+        <button type="button" role="radio" aria-checked="false" data-mode="off">Off</button>
+      </div>
+      <div class="opts" id="radioOpts" hidden>
+        <p class="hint">Plays William Victor Newbold’s uploads on archive.org at random, nonstop, favouring tracks this device hasn’t played yet. Recordings over 20 minutes play an 8–14 minute stretch from a random point. To play someone else’s uploads, type a creator name or an archive.org search.</p>
+        <div class="field"><label for="iaQuery">Search</label><input type="text" id="iaQuery" placeholder="william victor newbold" autocomplete="off" autocapitalize="off" spellcheck="false"><button class="key" id="iaApply" type="button">Use</button></div>
+        <div class="status" id="iaStatus" role="status"></div>
+      </div>
+      <div class="opts" id="filesOpts" hidden>
+        <div class="actions"><button class="key" id="filesAdd" type="button">Add files</button><button class="key" id="folderAdd" type="button">Add folder</button><button class="key" id="filesClear" type="button">Clear list</button></div>
+        <div class="status" id="filesStatus" role="status"></div>
+      </div>
+      <div class="opts" id="liveOpts" hidden>
+        <div class="field"><label for="audioDev">Input</label><select id="audioDev"><option value="">Default input</option></select><button class="key" id="audioStart" type="button">Listen</button></div>
+        <div class="status" id="liveStatus" role="status"></div>
+        <p class="hint">Choose BlackHole to follow the broadcast mix. If the input drops, the page reconnects by itself, and once the browser has allowed the input it starts again on reload. The input never goes to the speakers.</p>
+      </div>
+      <div class="opts" id="mixOpts" hidden>
+        <div class="rows">
+          <label class="row" for="lanes"><span>lanes</span><input type="range" id="lanes" min="1" max="4" step="1" value="1"><output id="lanesOut" for="lanes">1</output></label>
+          <label class="row" for="xfade"><span>crossfade</span><input type="range" id="xfade" min="0" max="12" step="0.5" value="6"><output id="xfadeOut" for="xfade">6 s</output></label>
+          <label class="row" for="vol"><span>volume</span><input type="range" id="vol" min="0" max="1" step="0.01" value="0.9"><output id="volOut" for="vol">90%</output></label>
+        </div>
+        <div class="np" id="npList"></div>
+        <div class="actions"><button class="key" id="btnPause" type="button">Pause</button><button class="key" id="btnSkip2" type="button">Skip track</button></div>
+      </div>
+    </div>
+    <div class="sec">
+      <h3>Video</h3>
+      <div class="field" data-standalone><label for="videoDev">Camera</label><select id="videoDev"><option value="">Default camera</option></select><button class="key" id="videoStart" type="button">Start</button></div>
+      <div class="actions"><button class="key" id="btnVideo" type="button">Video file</button></div>
+      <p class="hint" data-standalone>Pick OBS Virtual Camera to put the fractal stream on the Stream plane. It reconnects by itself if OBS restarts the camera.</p>
+    </div>
+    <div class="sec" data-standalone>
+      <h3>MIDI</h3>
+      <div class="field"><span>Inputs</span><span class="status" id="midiStatus">Not connected</span><button class="key" id="midiStart" type="button">Connect</button></div>
+      <p class="hint">Listens to every MIDI input, IAC buses included. Needs Chrome or Edge.</p>
+    </div>
   </section>
 
   <div class="keys" role="toolbar" aria-label="Main controls">
+    <button class="key primary" id="btnStart" type="button" hidden>Start audio</button>
     <button class="key" id="btnScene" type="button">Scene: orbit</button>
     <button class="key" id="btnPresets" type="button">New MilkDrop</button>
-    <button class="key" id="btnAudio" type="button">Audio file</button>
-    <button class="key" id="btnPlay" type="button" hidden>Pause</button>
-    <button class="key" id="btnVideo" type="button">Video file</button>
-    <button class="key" id="btnLive" type="button" aria-pressed="false" data-standalone>Live inputs</button>
+    <button class="key" id="btnSources" type="button" aria-pressed="false">Sources</button>
+    <button class="key" id="btnSkip" type="button" hidden>Skip track</button>
     <button class="key" id="btnEq" type="button" aria-pressed="false">Equations</button>
     <button class="key" id="btnHide" type="button">Hide controls</button>
     <button class="key" id="btnFull" type="button" hidden>Fullscreen</button>
   </div>
-  <input type="file" id="fileAudio" accept="audio/*" hidden>
+  <input type="file" id="fileAudio" accept="audio/*,.mp3,.wav,.flac,.ogg,.m4a,.aif,.aiff,.opus" multiple hidden>
+  <input type="file" id="fileFolder" webkitdirectory multiple hidden>
   <input type="file" id="fileVideo" accept="video/*" hidden>
   <input type="file" id="fileScene" accept=".json,application/json" hidden>
 </nav>
@@ -754,18 +820,60 @@ function resize() {
   trailMat.uniforms.uAspect.value = aspect;
 }
 
-/* ------------------------------------------------------------------ audio */
+/* ------------------------------------------------------------------ settings kept between visits */
+const PREFS_KEY = 'nd.prefs.v2';
+let prefs = {};
+try { prefs = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}') || {}; } catch (e) { prefs = {}; }
+function savePrefs() { try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch (e) { /* storage off */ } }
+function loadList(key) { try { const v = JSON.parse(localStorage.getItem(key) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
+function saveList(key, list) { try { localStorage.setItem(key, JSON.stringify(list)); } catch (e) { /* storage off */ } }
+const rand = (a, b) => a + Math.random() * (b - a);
+const pickOne = (list) => list[Math.floor(Math.random() * list.length)];
+function shuffle(list) {
+  for (let k = list.length - 1; k > 0; k--) { const j = Math.floor(Math.random() * (k + 1)); [list[k], list[j]] = [list[j], list[k]]; }
+  return list;
+}
+function fmtTime(sec) {
+  const s = Math.max(0, Math.floor(sec || 0)), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60;
+  return (h ? h + ':' + String(m).padStart(2, '0') : String(m)) + ':' + String(x).padStart(2, '0');
+}
+function parseLength(v) {
+  if (typeof v === 'number') return v;
+  const t = String(v || '').trim();
+  if (!t) return 0;
+  if (t.includes(':')) return t.split(':').reduce((acc, part) => acc * 60 + (parseFloat(part) || 0), 0);
+  return parseFloat(t) || 0;
+}
+async function permState(name) {
+  try { return (await navigator.permissions.query({ name })).state; } catch (e) { return 'unknown'; }
+}
+
+/* ------------------------------------------------------------------ audio graph
+   tracks → lane bus → play bus → compressor → volume → speakers
+                              └→ react bus → analyser + both MilkDrop planes
+   live input ────────────────→ react bus only, so it never feeds back into the room */
 const AC = window.AudioContext || window.webkitAudioContext;
 const audio = {
-  ctx: null, analyser: null, freq: null, source: null, el: null, stream: null, fresh: false, label: 'no audio',
+  ctx: null, analyser: null, freq: null, react: null, play: null, out: null, fresh: true,
   bands: { bass: 0, mid: 0, treb: 0 }, avg: { bass: 0.05, mid: 0.05, treb: 0.05 }, att: { bass: 0, mid: 0, treb: 0 },
 };
 try {
-  audio.ctx = new AC();
-  audio.analyser = audio.ctx.createAnalyser();
+  const ctx = new AC({ latencyHint: 'playback' });
+  audio.ctx = ctx;
+  audio.react = ctx.createGain();
+  audio.analyser = ctx.createAnalyser();
   audio.analyser.fftSize = 2048;
   audio.analyser.smoothingTimeConstant = 0.55;
   audio.freq = new Uint8Array(audio.analyser.frequencyBinCount);
+  audio.react.connect(audio.analyser);
+  audio.play = ctx.createGain();
+  audio.play.connect(audio.react);
+  const comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -16; comp.knee.value = 10; comp.ratio.value = 3; comp.attack.value = 0.01; comp.release.value = 0.3;
+  audio.out = ctx.createGain();
+  audio.play.connect(comp);
+  comp.connect(audio.out);
+  audio.out.connect(ctx.destination);
 } catch (e) { audio.ctx = null; }
 
 function bandLevel(lo, hi) {
@@ -776,9 +884,15 @@ function bandLevel(lo, hi) {
   return sum / ((b - a + 1) * 255);
 }
 const BANDS = [['bass', 20, 250], ['mid', 250, 2000], ['treb', 2000, 10000]];
+function audioActive() {
+  if (!audio.ctx) return false;
+  if (engine.mode === 'live') return !!engine.live.node;
+  return engine.lanes.some((l) => l.cur && l.cur.begun);
+}
 function updateAudio(dt) {
-  if (!audio.source) {
+  if (!audioActive() || engine.paused || engine.blocked) {
     for (const [b] of BANDS) { audio.bands[b] = 0; audio.att[b] *= Math.exp(-dt * 3); }
+    audio.fresh = true;
     return;
   }
   audio.analyser.getByteFrequencyData(audio.freq);
@@ -793,21 +907,517 @@ function updateAudio(dt) {
   }
   audio.fresh = false;
 }
-function connectSource(node, audible) {
-  node.connect(audio.analyser);
-  if (audible) node.connect(audio.ctx.destination);
-  for (const md of milkdrops) if (md.viz) { try { md.viz.connectAudio(node); } catch (e) { /* keep going */ } }
-  audio.source = node;
-  audio.fresh = true;
+
+/* ------------------------------------------------------------------ nonstop engine
+   Each lane plays one track after another with an equal-power crossfade. The next track
+   loads 40 s before the current one ends, so a slow server never leaves a gap; a track that
+   stalls for 15 s or fails to load is dropped and replaced. Several lanes play at once. */
+const LONG_FILE = 20 * 60, SEG_MIN = 8 * 60, SEG_MAX = 14 * 60, LOOKAHEAD = 40;
+const DEFAULT_QUERY = 'creator:("william victor newbold" OR "william v. newbold") AND mediatype:audio';
+function iaQueryFrom(text) {
+  const t = String(text || '').trim();
+  if (!t) return DEFAULT_QUERY;
+  if (/[:()]/.test(t)) return t;
+  return `creator:("${t.replace(/"/g, '')}") AND mediatype:audio`;
 }
-function disconnectSource() {
-  if (audio.source) { try { audio.source.disconnect(); } catch (e) { /* already gone */ } }
-  audio.source = null;
-  if (audio.el) { audio.el.pause(); URL.revokeObjectURL(audio.el.src); audio.el = null; }
-  if (audio.stream) { audio.stream.getTracks().forEach((t) => t.stop()); audio.stream = null; }
-  audio.label = 'no audio';
-  $('btnPlay').hidden = true;
-  setLiveButton('audioStart', false, 'Listen');
+const engine = {
+  mode: 'off', gen: 0, lanes: [], paused: false, blocked: false, blockedBy: '', suspendSince: 0, lastResume: 0,
+  laneCount: clamp(Math.round(num(prefs.lanes, 1)), 1, 4), fade: clamp(num(prefs.fade, 6), 0, 12), volume: clamp(num(prefs.volume, 0.9), 0, 1),
+  maxPlay: 0, newtrack: 0, lastStarted: null, files: [], bag: [],
+  query: iaQueryFrom(prefs.queryText),
+  ia: { ids: null, idsQuery: '', fetching: null, meta: new Map(), bad: new Set(), recent: loadList('nd.recent.v1'), played: loadList('nd.played.v1'), note: '', noteKind: '' },
+  live: { want: false, stream: null, node: null, label: '', timer: 0, deviceId: prefs.liveDevice || '' },
+};
+const playedSet = new Set(engine.ia.played);
+if (audio.out) audio.out.gain.value = engine.volume;
+
+async function fetchJSON(url, ms = 20000) {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), ms);
+  try {
+    const r = await fetch(url, { signal: ctl.signal });
+    if (!r.ok) throw new Error(`archive.org answered ${r.status}`);
+    return await r.json();
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error('archive.org took too long to answer');
+    throw e;
+  } finally { clearTimeout(timer); }
+}
+async function iaCatalog() {
+  const ia = engine.ia, q = engine.query;
+  if (ia.ids && ia.idsQuery === q) return ia.ids;
+  if (ia.fetching) return ia.fetching;
+  ia.fetching = (async () => {
+    let cached = null;
+    try { cached = JSON.parse(localStorage.getItem('nd.catalog.v1') || 'null'); } catch (e) { cached = null; }
+    const usable = cached && cached.q === q && Array.isArray(cached.ids) && cached.ids.length;
+    if (usable && Date.now() - cached.at < 12 * 3600e3) { ia.ids = cached.ids; ia.idsQuery = q; return ia.ids; }
+    try {
+      const data = await fetchJSON('https://archive.org/advancedsearch.php?q=' + encodeURIComponent(q) + '&fl[]=identifier&rows=10000&output=json');
+      const ids = ((data.response && data.response.docs) || []).map((d) => d.identifier).filter(Boolean);
+      if (!ids.length) { const e = new Error('That search found no audio items on archive.org. Clear the box to go back to the full catalog.'); e.empty = true; throw e; }
+      ia.ids = ids; ia.idsQuery = q;
+      try { localStorage.setItem('nd.catalog.v1', JSON.stringify({ q, at: Date.now(), ids })); } catch (e) { /* storage off */ }
+      return ids;
+    } catch (e) {
+      if (usable) { ia.ids = cached.ids; ia.idsQuery = q; return ia.ids; }   // stale list beats silence
+      throw e;
+    }
+  })();
+  try { return await ia.fetching; } finally { ia.fetching = null; }
+}
+async function iaMeta(id) {
+  const cache = engine.ia.meta;
+  if (cache.has(id)) return cache.get(id);
+  const meta = await fetchJSON('https://archive.org/metadata/' + encodeURIComponent(id));
+  cache.set(id, meta);
+  if (cache.size > 300) cache.delete(cache.keys().next().value);
+  return meta;
+}
+function busyKeys(field) {
+  const out = new Set();
+  for (const l of engine.lanes) for (const t of [l.cur, l.next]) if (t) out.add(t.info[field]);
+  return out;
+}
+function remember(id, key) {
+  const ia = engine.ia;
+  ia.recent.push(id);
+  if (ia.recent.length > 400) ia.recent.splice(0, ia.recent.length - 400);
+  if (!playedSet.has(key)) {
+    playedSet.add(key);
+    ia.played.push(key);
+    if (ia.played.length > 5000) for (const k of ia.played.splice(0, ia.played.length - 5000)) playedSet.delete(k);
+  }
+  saveList('nd.recent.v1', ia.recent);
+  saveList('nd.played.v1', ia.played);
+}
+async function pickRadio() {
+  const ia = engine.ia, ids = await iaCatalog();
+  const busy = busyKeys('item');
+  const recent = new Set(ia.recent.slice(-Math.min(200, Math.floor(ids.length / 2))));
+  for (let attempt = 0; attempt < 10; attempt++) {
+    let pool = ids.filter((id) => !ia.bad.has(id) && !busy.has(id) && !recent.has(id));
+    if (!pool.length) pool = ids.filter((id) => !ia.bad.has(id) && !busy.has(id));
+    if (!pool.length) pool = ids;
+    const id = pickOne(pool);
+    let meta;
+    try { meta = await iaMeta(id); } catch (e) { if (attempt >= 2) throw e; continue; }
+    const files = (meta.files || []).filter((f) => /mp3/i.test(f.format || '') && !(parseLength(f.length) > 0 && parseLength(f.length) < 20));
+    if (!files.length) { ia.bad.add(id); continue; }
+    const unheard = files.filter((f) => !playedSet.has(id + '/' + f.name));
+    const f = pickOne(unheard.length ? unheard : files);
+    const m = meta.metadata || {};
+    const creator = Array.isArray(m.creator) ? m.creator[0] : m.creator;
+    const album = Array.isArray(m.title) ? m.title[0] : m.title;
+    remember(id, id + '/' + f.name);
+    const path = '/' + f.name.split('/').map(encodeURIComponent).join('/');
+    // the item's own file servers, tried in turn if the usual download link fails
+    const servers = [...new Set([...(meta.workable_servers || []), meta.d1, meta.d2, meta.server].filter(Boolean))];
+    return {
+      key: id + '/' + f.name, item: id, cors: true,
+      url: 'https://archive.org/download/' + encodeURIComponent(id) + path,
+      alts: meta.dir ? servers.map((s) => `https://${s}${meta.dir}${path}`) : [],
+      title: String(f.title || f.name.replace(/^.*\//, '').replace(/\.[^.]+$/, '')),
+      album: String(album || id), artist: String(creator || ''),
+      link: 'https://archive.org/details/' + encodeURIComponent(id), length: parseLength(f.length),
+    };
+  }
+  return null;
+}
+function pickFile() {
+  if (!engine.files.length) return null;
+  const busy = busyKeys('key');
+  if (!engine.bag.length) engine.bag = shuffle(engine.files.map((_, k) => k));
+  let at = engine.bag.findIndex((k) => engine.files[k] && !busy.has(engine.files[k].key));
+  if (at < 0) at = 0;
+  const f = engine.files[engine.bag.splice(at, 1)[0]];
+  return f ? { ...f } : null;
+}
+
+function rampGain(param, target, fade, t0) {
+  const from = param.value;
+  try {
+    param.cancelScheduledValues(t0);
+    param.setValueAtTime(from, t0);
+    if (fade < 0.03 || Math.abs(target - from) < 1e-4) { param.setValueAtTime(target, t0 + 0.005); return; }
+    const n = 64, curve = new Float32Array(n), up = target > from;
+    for (let k = 0; k < n; k++) {
+      const x = k / (n - 1);
+      curve[k] = from + (target - from) * (up ? Math.sin(x * Math.PI / 2) : 1 - Math.cos(x * Math.PI / 2));
+    }
+    param.setValueCurveAtTime(curve, t0 + 0.005, fade);
+  } catch (e) {
+    try { param.cancelScheduledValues(t0); param.setValueAtTime(from, t0); param.linearRampToValueAtTime(target, t0 + Math.max(fade, 0.01)); }
+    catch (e2) { param.value = target; }
+  }
+}
+function onPlayError(err, tr) {
+  if (!err || err.name === 'AbortError') return;
+  if (err.name === 'NotAllowedError') { setBlocked(true, 'play'); return; }
+  tr.failed = true;
+  tr.lane.wake();
+}
+function playTrack(tr) {
+  tr.playPending = true;
+  let p;
+  try { p = tr.el.play(); } catch (e) { tr.playPending = false; onPlayError(e, tr); return; }
+  if (p && p.then) p.then(() => { tr.playPending = false; if (engine.blockedBy === 'play') setBlocked(false); }, (err) => { tr.playPending = false; onPlayError(err, tr); });
+  else tr.playPending = false;
+}
+function makeTrack(lane, info) {
+  const el = new Audio();
+  if (info.cors) el.crossOrigin = 'anonymous';
+  el.preload = 'auto';
+  const gain = audio.ctx.createGain();
+  gain.gain.value = 0;
+  gain.connect(lane.bus);
+  const node = audio.ctx.createMediaElementSource(el);
+  node.connect(gain);
+  const tr = { lane, info, el, node, gain, start: 0, end: Infinity, ready: false, failed: false, begun: false,
+    lastT: -1, lastMove: performance.now(), made: performance.now(), playPending: false, startedAt: 0 };
+  el.addEventListener('loadedmetadata', () => {
+    const dur = info.length > 0 ? info.length : (Number.isFinite(el.duration) ? el.duration : 0);
+    if (dur > LONG_FILE) { const seg = rand(SEG_MIN, SEG_MAX); tr.start = rand(0, dur - seg); tr.end = tr.start + seg; }
+    else { tr.start = 0; tr.end = dur > 0 ? dur : Infinity; }
+    if (engine.maxPlay > 0) tr.end = Math.min(tr.end, tr.start + engine.maxPlay);
+    if (tr.start > 0.5) { try { el.currentTime = tr.start; } catch (e) { tr.start = 0; } }
+  }, { once: true });
+  const markReady = () => { if (!tr.ready && !el.seeking && el.readyState >= 3) { tr.ready = true; lane.wake(); } };
+  el.addEventListener('canplay', markReady);
+  el.addEventListener('seeked', markReady);
+  el.addEventListener('error', () => {
+    if (!tr.begun && info.alts && info.alts.length) { el.src = info.alts.shift(); el.load(); return; }
+    tr.failed = true;
+    lane.wake();
+  });
+  el.addEventListener('ended', () => lane.wake());
+  el.addEventListener('timeupdate', () => { if (lane.cur === tr) lane.tick(); });
+  el.src = info.url;
+  el.load();
+  return tr;
+}
+function dispose(tr) {
+  if (!tr || tr.disposed) return;
+  tr.disposed = true;
+  try { tr.el.pause(); tr.el.removeAttribute('src'); tr.el.load(); } catch (e) { /* already gone */ }
+  try { tr.node.disconnect(); tr.gain.disconnect(); } catch (e) { /* already gone */ }
+}
+
+class Lane {
+  constructor(index) {
+    this.index = index;
+    this.bus = audio.ctx.createGain();
+    this.bus.connect(audio.play);
+    this.cur = null; this.next = null; this.preparing = false; this.idleUntil = 0; this.skip = false; this.dead = false;
+  }
+  wake() { queueMicrotask(() => this.tick()); }
+  startable(t) { return !!t && !t.failed && (t.ready || performance.now() - t.made > 10000); }
+  ensureNext() {
+    if (this.dead || this.next || this.preparing || performance.now() < this.idleUntil) return;
+    if (engine.mode !== 'radio' && engine.mode !== 'files') return;
+    this.preparing = true;
+    const gen = engine.gen;
+    (async () => {
+      try {
+        const info = engine.mode === 'radio' ? await pickRadio() : pickFile();
+        if (gen !== engine.gen || this.dead) return;
+        if (!info) { this.idleUntil = performance.now() + 4000; return; }
+        this.next = makeTrack(this, info);
+        if (engine.mode === 'radio' && engine.ia.noteKind === 'err') setIaNote('', '');
+      } catch (e) {
+        this.idleUntil = performance.now() + (e.empty ? 60000 : 15000);
+        if (engine.mode === 'radio') setIaNote(e.empty ? e.message : `${e.message || 'archive.org didn’t answer'}. Trying again in a few seconds.`, 'err');
+      } finally {
+        this.preparing = false;
+        this.wake();
+      }
+    })();
+  }
+  tick() {
+    if (this.dead) return;
+    if (this.next && this.next.failed) { dispose(this.next); this.next = null; }
+    if (engine.blocked) { if (!this.cur) this.ensureNext(); return; }
+    if (engine.paused) return;
+    const now = performance.now(), c = this.cur;
+    if (!c) {
+      if (this.startable(this.next)) this.begin(this.next, Math.min(1.5, engine.fade));
+      else this.ensureNext();
+      return;
+    }
+    if (c.failed) { this.drop(); return; }
+    const t = c.el.currentTime;
+    if (t !== c.lastT) { c.lastT = t; c.lastMove = now; }
+    else if (!c.el.paused && now - c.lastMove > 15000) { c.failed = true; this.drop(); return; }
+    if (c.el.paused && !c.el.ended && !c.playPending) playTrack(c);     // interrupted by the system: start again
+    const dur = Number.isFinite(c.el.duration) && c.el.duration > 0 ? c.el.duration : Infinity;
+    const left = Math.min(c.end, dur) - t;
+    if (left < engine.fade + LOOKAHEAD || this.skip) this.ensureNext();
+    const ready = this.startable(this.next);
+    if (ready && (this.skip || left <= engine.fade)) {
+      this.begin(this.next, this.skip ? Math.min(engine.fade, 2) : Math.max(0.05, Math.min(engine.fade, left)));
+      this.skip = false;
+      return;
+    }
+    if (c.el.ended || left <= 0) {
+      this.retire(c, 0.25);
+      this.cur = null;
+      if (ready) this.begin(this.next, 0.5);
+    }
+  }
+  begin(tr, fade) {
+    const t0 = audio.ctx.currentTime;
+    this.next = null;
+    tr.begun = true; tr.lastT = -1; tr.lastMove = performance.now(); tr.startedAt = performance.now();
+    playTrack(tr);
+    rampGain(tr.gain.gain, 1, fade, t0);
+    if (this.cur && this.cur !== tr) this.retire(this.cur, fade);
+    this.cur = tr;
+    onTrackStart(this, tr);
+  }
+  retire(tr, fade) {
+    rampGain(tr.gain.gain, 0, fade, audio.ctx.currentTime);
+    setTimeout(() => dispose(tr), (fade + 0.5) * 1000);
+  }
+  drop() {
+    const c = this.cur;
+    this.cur = null;
+    if (c) this.retire(c, 0.2);
+    if (this.startable(this.next)) this.begin(this.next, 0.6);
+    else this.ensureNext();
+  }
+  destroy(fade) {
+    this.dead = true;
+    if (this.cur) this.retire(this.cur, fade);
+    if (this.next) dispose(this.next);
+    this.cur = this.next = null;
+    const bus = this.bus;
+    setTimeout(() => { try { bus.disconnect(); } catch (e) { /* gone */ } }, (fade + 0.8) * 1000);
+  }
+}
+
+function buildLanes() {
+  while (engine.lanes.length < engine.laneCount) engine.lanes.push(new Lane(engine.lanes.length));
+  while (engine.lanes.length > engine.laneCount) engine.lanes.pop().destroy(3);
+  const g = 1 / Math.sqrt(engine.laneCount);
+  for (const l of engine.lanes) l.bus.gain.setTargetAtTime(g, audio.ctx.currentTime, 0.4);
+  for (const l of engine.lanes) l.tick();
+}
+function setMode(mode, user, start = true) {
+  if (!audio.ctx && mode !== 'off') { toast('This browser has no Web Audio, so audio can’t play here.'); mode = 'off'; }
+  if (!STANDALONE && (mode === 'radio' || mode === 'live')) mode = 'off';
+  engine.gen++;
+  for (const l of engine.lanes) l.destroy(1.2);
+  engine.lanes = [];
+  stopLive();
+  engine.mode = mode;
+  engine.paused = false;
+  engine.lastStarted = null;
+  if (mode === 'off') setBlocked(false);
+  prefs.mode = mode;
+  savePrefs();
+  audio.fresh = true;
+  if (mode === 'radio' || mode === 'files') buildLanes();
+  if (mode === 'live') {
+    if (start) startLive(user);
+    else setLiveStatus('Press Listen to start the input.', '');
+  }
+  if (mode !== 'off') unlockAudio();
+  refreshAudioUI();
+  updateWakeLock();
+  setMediaState();
+}
+function setBlocked(on, by) {
+  engine.blocked = on;
+  engine.blockedBy = on ? (by || engine.blockedBy || 'ctx') : '';
+  refreshAudioUI();
+}
+// Browsers keep audio silent until the first click or key press. Any press on the page counts.
+function unlockAudio() {
+  if (!audio.ctx || engine.mode === 'off') return;
+  const wasBlocked = engine.blocked;
+  if (wasBlocked) setBlocked(false);
+  if (!engine.paused) {
+    for (const l of engine.lanes) {
+      if (l.cur && l.cur.begun && l.cur.el.paused && !l.cur.el.ended) playTrack(l.cur);
+      else if (wasBlocked && !l.cur && l.startable(l.next)) l.begin(l.next, 1.5);
+    }
+  }
+  if (audio.ctx.state !== 'running') {
+    engine.lastResume = performance.now();
+    audio.ctx.resume().catch(() => { /* still waiting for a press */ });
+  }
+}
+function ctxWatch() {
+  if (!audio.ctx) return;
+  const want = engine.mode !== 'off' && !engine.paused;
+  if (!want || audio.ctx.state === 'running') {
+    engine.suspendSince = 0;
+    if (audio.ctx.state === 'running' && engine.blockedBy === 'ctx') setBlocked(false);
+    return;
+  }
+  const now = performance.now();
+  if (now - engine.lastResume > 2000) { engine.lastResume = now; audio.ctx.resume().catch(() => {}); }
+  if (!engine.suspendSince) engine.suspendSince = now;
+  if (now - engine.suspendSince > 1500 && !engine.blocked) setBlocked(true, 'ctx');
+}
+for (const ev of ['pointerdown', 'keydown', 'touchend']) window.addEventListener(ev, unlockAudio, { capture: true, passive: true });
+
+function setPaused(p) {
+  if (engine.mode !== 'radio' && engine.mode !== 'files') return;
+  engine.paused = p;
+  for (const l of engine.lanes) {
+    const c = l.cur;
+    if (!c) continue;
+    if (p) c.el.pause();
+    else { c.lastMove = performance.now(); playTrack(c); }
+  }
+  if (!p) unlockAudio();
+  refreshAudioUI();
+  updateWakeLock();
+  setMediaState();
+}
+function skipTrack() {
+  if (engine.mode !== 'radio' && engine.mode !== 'files') return;
+  if (engine.paused) setPaused(false);
+  const lanes = engine.lanes.filter((l) => l.cur);
+  if (!lanes.length) return;
+  const lane = lanes.reduce((a, b) => (a.cur.startedAt <= b.cur.startedAt ? a : b));
+  lane.skip = true;
+  lane.idleUntil = 0;
+  lane.ensureNext();
+  lane.tick();
+  if (lane.skip) toast('Skipping as soon as the next track has loaded.', 2200);
+}
+function onTrackStart(lane, tr) {
+  engine.lastStarted = tr;
+  engine.newtrack = 1;
+  // a new track brings a new MilkDrop preset on one plane
+  if (!reducedMotion) {
+    const md = milkdrops[cycleNext++ % milkdrops.length];
+    if (md && md.ok) { loadPreset(md, pickPreset(milkdrops.map((m) => m.name)), 4); syncMilkdropPlanes(); }
+    cycleTimer = 0;
+  }
+  try {
+    if ('mediaSession' in navigator && window.MediaMetadata) {
+      navigator.mediaSession.metadata = new MediaMetadata({ title: tr.info.title, artist: tr.info.artist || 'Nested Dimensions', album: tr.info.album || '' });
+    }
+  } catch (e) { /* no media session */ }
+  refreshAudioUI();
+}
+function setMediaState() {
+  try {
+    if (!('mediaSession' in navigator)) return;
+    const tracks = engine.mode === 'radio' || engine.mode === 'files';
+    navigator.mediaSession.playbackState = !tracks ? 'none' : engine.paused ? 'paused' : 'playing';
+  } catch (e) { /* no media session */ }
+}
+try {
+  const ms = navigator.mediaSession;
+  if (ms) {
+    ms.setActionHandler('play', () => setPaused(false));
+    ms.setActionHandler('pause', () => setPaused(true));
+    ms.setActionHandler('nexttrack', skipTrack);
+  }
+} catch (e) { /* no media session */ }
+
+// Keep the screen (and with it the audio) awake while sound is running.
+let wakeLock = null;
+async function updateWakeLock() {
+  const want = engine.mode !== 'off' && !engine.paused && document.visibilityState === 'visible';
+  try {
+    if (want && !wakeLock && navigator.wakeLock) {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+    } else if (!want && wakeLock) {
+      const w = wakeLock; wakeLock = null; await w.release();
+    }
+  } catch (e) { wakeLock = null; }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && audio.ctx && engine.mode !== 'off' && !engine.paused) audio.ctx.resume().catch(() => {});
+  updateWakeLock();
+});
+
+/* live input: reconnects by itself when the device drops */
+function liveConstraints(id) {
+  return { audio: { deviceId: id ? { exact: id } : undefined, echoCancellation: false, noiseSuppression: false, autoGainControl: false }, video: false };
+}
+async function startLive(user) {
+  const L = engine.live;
+  L.want = true;
+  clearTimeout(L.timer);
+  if (!audio.ctx || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    setLiveStatus('This browser can’t open an audio input.', 'err');
+    return;
+  }
+  if (L.stream) return;
+  const id = $('audioDev').value || L.deviceId;
+  setLiveStatus('Opening the input…', '');
+  try {
+    let stream;
+    try { stream = await navigator.mediaDevices.getUserMedia(liveConstraints(id)); }
+    catch (e) {
+      if (id && (e.name === 'OverconstrainedError' || e.name === 'NotFoundError')) stream = await navigator.mediaDevices.getUserMedia(liveConstraints(''));
+      else throw e;
+    }
+    if (!L.want || engine.mode !== 'live' || L.stream) { stream.getTracks().forEach((t) => t.stop()); return; }
+    const track = stream.getAudioTracks()[0];
+    L.stream = stream;
+    L.node = audio.ctx.createMediaStreamSource(stream);
+    L.node.connect(audio.react);
+    L.label = shortName((track && track.label) || 'live input');
+    L.deviceId = (track && track.getSettings && track.getSettings().deviceId) || id || '';
+    prefs.liveDevice = L.deviceId;
+    savePrefs();
+    audio.fresh = true;
+    if (track) track.addEventListener('ended', () => { if (L.stream === stream) liveLost('The input stopped.'); });
+    setLiveStatus(`Listening to ${L.label}.`, 'ok');
+    unlockAudio();
+    refreshAudioUI();
+    listDevices().catch(() => {});
+  } catch (e) {
+    if (e.name === 'NotAllowedError' || e.name === 'SecurityError') {
+      setLiveStatus('Audio input access is blocked. Allow the microphone for this page, then press Listen.', 'err');
+      if (user) toast('Audio input access is blocked. Allow the microphone for this page, then press Listen.');
+      return;
+    }
+    setLiveStatus(`The input didn’t open (${e.message || e.name}). Trying again in 5 s.`, 'err');
+    L.timer = setTimeout(() => { if (L.want && engine.mode === 'live' && !L.stream) startLive(false); }, 5000);
+  }
+}
+function dropLiveStream() {
+  const L = engine.live;
+  if (L.node) { try { L.node.disconnect(); } catch (e) { /* gone */ } }
+  if (L.stream) L.stream.getTracks().forEach((t) => t.stop());
+  L.node = null; L.stream = null;
+}
+function liveLost(msg) {
+  const L = engine.live;
+  dropLiveStream();
+  if (!L.want || engine.mode !== 'live') return;
+  setLiveStatus(`${msg} Reconnecting…`, 'err');
+  refreshAudioUI();
+  L.timer = setTimeout(() => startLive(false), 2000);
+}
+function stopLive() {
+  engine.live.want = false;
+  clearTimeout(engine.live.timer);
+  dropLiveStream();
+}
+function setLiveStatus(msg, kind) { const s = $('liveStatus'); s.textContent = msg; s.className = 'status' + (kind ? ' ' + kind : ''); }
+function setIaNote(msg, kind) { engine.ia.note = msg; engine.ia.noteKind = kind; refreshIaStatus(); }
+function refreshIaStatus() {
+  const s = $('iaStatus'), ia = engine.ia;
+  let msg = ia.note, kind = ia.noteKind;
+  if (!msg) {
+    if (ia.ids && ia.idsQuery === engine.query) {
+      const n = ia.played.length;
+      msg = `${ia.ids.length.toLocaleString()} items in the catalog · ${n.toLocaleString()} track${n === 1 ? '' : 's'} played on this device`;
+    } else msg = engine.mode === 'radio' ? 'Loading the catalog from archive.org…' : '';
+    kind = '';
+  }
+  if (s.textContent !== msg) s.textContent = msg;
+  s.className = 'status' + (kind ? ' ' + kind : '');
 }
 
 /* ------------------------------------------------------------------ MIDI (GitHub Pages build) */
@@ -830,15 +1440,17 @@ function bindMidi() {
   $('midiStatus').textContent = names.length ? `Listening: ${names.join(', ')}` : 'No MIDI inputs found';
   if (!midi.last) $('midiLabel').textContent = names.length ? 'ready' : 'none';
 }
-async function startMidi() {
-  if (!navigator.requestMIDIAccess) { toast('This browser has no Web MIDI. Open the page in Chrome or Edge.'); return; }
+async function startMidi(user) {
+  if (!navigator.requestMIDIAccess) { if (user) toast('This browser has no Web MIDI. Open the page in Chrome or Edge.'); return; }
   try {
     midi.access = await navigator.requestMIDIAccess();
     bindMidi();
-    midi.access.onstatechange = bindMidi;
+    midi.access.onstatechange = bindMidi;      // devices that come and go are picked up again
     setLiveButton('midiStart', true, 'Connected');
+    prefs.midi = true;
+    savePrefs();
   } catch (e) {
-    toast(`MIDI access was refused (${e.message}). Allow MIDI for this site and try again.`);
+    if (user) toast(`MIDI access was refused (${e.message}). Allow MIDI for this site and try again.`);
   }
 }
 function updateMidi(dt) { midi.onset *= Math.exp(-dt * 5); }
@@ -913,6 +1525,7 @@ function initMilkdrop(key, mode) {
       md.viz = BC.createVisualizer(audio.ctx, canvas, {
         width: MD_W, height: MD_H, pixelRatio: 1, textureRatio: 1, meshWidth: coarse ? 32 : 48, meshHeight: coarse ? 24 : 36,
       });
+      md.viz.connectAudio(audio.react);
       md.tex = new THREE.CanvasTexture(canvas);
       md.tex.minFilter = THREE.LinearFilter;
       md.tex.generateMipmaps = false;
@@ -929,7 +1542,7 @@ function loadPreset(md, name, blend) {
   catch (e) { md.ok = false; md.error = e; }
 }
 function pickPreset(exclude) {
-  const base = !audio.source && QUIET_FRIENDLY.length ? QUIET_FRIENDLY : PRESET_NAMES;
+  const base = !audioActive() && QUIET_FRIENDLY.length ? QUIET_FRIENDLY : PRESET_NAMES;
   const pool = base.filter((n) => !exclude.includes(n));
   return pool[Math.floor(Math.random() * pool.length)] || base[0];
 }
@@ -1023,6 +1636,11 @@ function fillInputs(t, dt, fps, frameCount) {
   inputs.vol = (audio.bands.bass + audio.bands.mid + audio.bands.treb) / 3;
   inputs.note = midi.note; inputs.vel = midi.vel; inputs.onset = midi.onset; inputs.held = midi.held;
   for (let k = 1; k <= 16; k++) inputs['cc' + k] = midi.cc[k];
+  const lt = engine.lastStarted && engine.lastStarted.lane.cur === engine.lastStarted ? engine.lastStarted : null;
+  inputs.track = lt ? Math.max(0, lt.el.currentTime - lt.start) : 0;
+  inputs.trackpos = lt && Number.isFinite(lt.end) && lt.end > lt.start ? clamp((lt.el.currentTime - lt.start) / (lt.end - lt.start), 0, 1) : 0;
+  inputs.newtrack = engine.newtrack;
+  inputs.lanes = engine.lanes.filter((l) => l.cur).length;
   inputs.aspect = aspect; inputs.pi = Math.PI; inputs.tau = Math.PI * 2; inputs.n = PLANE_KEYS.length;
 }
 function applyLook(mesh, a, bright, additive) {
@@ -1067,7 +1685,7 @@ function evaluate() {
 }
 
 /* ------------------------------------------------------------------ video on the Stream plane */
-const video = { el: null, tex: null, mat: null, stream: null, url: null, active: false };
+const video = { el: null, tex: null, mat: null, stream: null, url: null, active: false, want: false, timer: 0 };
 function showVideo(el) {
   video.tex = new THREE.VideoTexture(el);
   video.tex.minFilter = THREE.LinearFilter;
@@ -1077,7 +1695,7 @@ function showVideo(el) {
   video.active = true;
   $('btnVideo').textContent = 'Back to fractal';
 }
-function stopVideo() {
+function releaseVideo() {
   if (video.el) { video.el.pause(); video.el.removeAttribute('src'); video.el.srcObject = null; }
   if (video.url) URL.revokeObjectURL(video.url);
   if (video.stream) video.stream.getTracks().forEach((t) => t.stop());
@@ -1088,6 +1706,12 @@ function stopVideo() {
   $('btnVideo').textContent = 'Video file';
   setLiveButton('videoStart', false, 'Start');
 }
+function stopVideo() {
+  video.want = false;
+  clearTimeout(video.timer);
+  releaseVideo();
+  if (prefs.video) { prefs.video = ''; savePrefs(); }
+}
 function newVideoElement() {
   const el = document.createElement('video');
   el.muted = true; el.loop = true; el.playsInline = true;
@@ -1095,7 +1719,7 @@ function newVideoElement() {
   return el;
 }
 
-/* ------------------------------------------------------------------ live inputs (GitHub Pages build) */
+/* ------------------------------------------------------------------ devices (GitHub Pages build) */
 function setLiveButton(id, on, text) {
   const b = $(id);
   if (!b) return;
@@ -1105,53 +1729,63 @@ function setLiveButton(id, on, text) {
 async function listDevices() {
   if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
   const devs = await navigator.mediaDevices.enumerateDevices();
-  const fill = (sel, list, def, noun) => {
-    const cur = sel.value;
+  const fill = (sel, list, def, noun, saved) => {
+    const cur = sel.value || saved || '';
     sel.replaceChildren(new Option(def, ''), ...list.map((d, k) => new Option(d.label || `${noun} ${k + 1}`, d.deviceId)));
     if ([...sel.options].some((o) => o.value === cur)) sel.value = cur;
   };
-  fill($('audioDev'), devs.filter((d) => d.kind === 'audioinput'), 'Default input', 'Input');
-  fill($('videoDev'), devs.filter((d) => d.kind === 'videoinput'), 'Default camera', 'Camera');
+  fill($('audioDev'), devs.filter((d) => d.kind === 'audioinput'), 'Default input', 'Input', engine.live.deviceId);
+  fill($('videoDev'), devs.filter((d) => d.kind === 'videoinput'), 'Default camera', 'Camera', prefs.videoDevice);
 }
-async function startLiveAudio() {
-  if (audio.stream) { disconnectSource(); return; }
-  if (!audio.ctx || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { toast('This browser can’t open an audio input.'); return; }
-  const id = $('audioDev').value;
+async function startCamera(user) {
+  if (user && video.stream) { stopVideo(); return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { if (user) toast('This browser can’t open a camera.'); return; }
+  video.want = true;
+  clearTimeout(video.timer);
+  const id = $('videoDev').value || prefs.videoDevice || '';
+  const cons = (d) => ({ video: { deviceId: d ? { exact: d } : undefined, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
   try {
-    audio.ctx.resume();
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: { deviceId: id ? { exact: id } : undefined, echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-      video: false,
-    });
-    disconnectSource();
-    audio.stream = stream;
-    connectSource(audio.ctx.createMediaStreamSource(stream), false);
-    audio.label = shortName(stream.getAudioTracks()[0]?.label || 'live input');
-    setLiveButton('audioStart', true, 'Stop');
-    listDevices();
-  } catch (e) {
-    toast(`The audio input didn’t open (${e.message}). Allow microphone access for this page, or pick another input.`);
-  }
-}
-async function startCamera() {
-  if (video.stream) { stopVideo(); return; }
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { toast('This browser can’t open a camera.'); return; }
-  const id = $('videoDev').value;
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { deviceId: id ? { exact: id } : undefined, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false,
-    });
-    stopVideo();
+    let stream;
+    try { stream = await navigator.mediaDevices.getUserMedia(cons(id)); }
+    catch (e) {
+      if (id && (e.name === 'OverconstrainedError' || e.name === 'NotFoundError')) stream = await navigator.mediaDevices.getUserMedia(cons(''));
+      else throw e;
+    }
+    if (!video.want) { stream.getTracks().forEach((t) => t.stop()); return; }
+    releaseVideo();
     const el = newVideoElement();
     el.srcObject = stream;
     video.stream = stream; video.el = el;
     await el.play();
     showVideo(el);
+    const track = stream.getVideoTracks()[0];
+    prefs.video = 'camera';
+    prefs.videoDevice = (track && track.getSettings && track.getSettings().deviceId) || id;
+    savePrefs();
+    if (track) track.addEventListener('ended', () => {
+      if (!video.want || video.stream !== stream) return;
+      releaseVideo();
+      toast('The camera stopped. Reconnecting…', 2500);
+      video.timer = setTimeout(() => startCamera(false), 2000);
+    });
     setLiveButton('videoStart', true, 'Stop');
-    listDevices();
+    listDevices().catch(() => {});
   } catch (e) {
-    toast(`The camera didn’t open (${e.message}). Allow camera access for this page, or pick another device.`);
+    if (e.name === 'NotAllowedError' || e.name === 'SecurityError') {
+      video.want = false;
+      if (user) toast('Camera access is blocked. Allow the camera for this page and try again.');
+      return;
+    }
+    if (user) toast(`The camera didn’t open (${e.message || e.name}). Trying again in 5 s.`);
+    if (video.want) video.timer = setTimeout(() => startCamera(false), 5000);
   }
+}
+if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+  navigator.mediaDevices.addEventListener('devicechange', () => {
+    listDevices().catch(() => {});
+    if (engine.mode === 'live' && engine.live.want && !engine.live.stream) startLive(false);
+    if (video.want && !video.stream) startCamera(false);
+  });
 }
 
 /* ------------------------------------------------------------------ editor */
@@ -1224,6 +1858,100 @@ function loadSceneJSON(text, origin) {
   setStatus(`Loaded the scene “${sc.name}”.`, 'ok');
 }
 
+/* ------------------------------------------------------------------ sources panel */
+function audioLabelText() {
+  const m = engine.mode;
+  if (m === 'off' || !audio.ctx) return 'no audio';
+  if (engine.blocked) return 'audio waiting for Start';
+  if (m === 'live') return engine.live.stream ? engine.live.label : 'input reconnecting';
+  if (engine.paused) return 'paused';
+  const n = engine.lanes.length, lanes = n > 1 ? ` · ${n} lanes` : '';
+  if (m === 'radio') return 'archive radio' + lanes;
+  return `${engine.files.length} file${engine.files.length === 1 ? '' : 's'}` + lanes;
+}
+function refreshFilesStatus() {
+  const n = engine.files.length;
+  $('filesStatus').textContent = n
+    ? `${n} file${n === 1 ? '' : 's'}, shuffled. Each plays once before any repeats. Files stay listed until you reload the page.`
+    : 'No files yet. Add some and they play shuffled and crossfaded, nonstop.';
+}
+function refreshAudioUI() {
+  const m = engine.mode, tracks = m === 'radio' || m === 'files';
+  for (const b of document.querySelectorAll('#srcSeg [data-mode]')) b.setAttribute('aria-checked', String(b.dataset.mode === m));
+  $('radioOpts').hidden = !(STANDALONE && m === 'radio');
+  $('filesOpts').hidden = m !== 'files';
+  $('liveOpts').hidden = !(STANDALONE && m === 'live');
+  $('mixOpts').hidden = !tracks;
+  $('btnSkip').hidden = !tracks;
+  $('btnStart').hidden = !(engine.blocked && m !== 'off');
+  $('btnPause').textContent = engine.paused ? 'Play' : 'Pause';
+  const liveOn = m === 'live' && !!engine.live.stream;
+  setLiveButton('audioStart', liveOn, liveOn ? 'Stop' : 'Listen');
+  $('audioLabel').textContent = audioLabelText();
+  refreshFilesStatus();
+  refreshIaStatus();
+}
+function renderNowPlaying() {
+  const box = $('npList'), lanes = engine.lanes;
+  if (box.children.length !== lanes.length) {
+    box.replaceChildren(...lanes.map((l, k) => {
+      const row = document.createElement('div');
+      const n = document.createElement('span'); n.className = 'n'; n.textContent = String(k + 1);
+      const a = document.createElement('a'); a.className = 't'; a.target = '_blank'; a.rel = 'noopener';
+      const tm = document.createElement('span'); tm.className = 'tm';
+      row.append(n, a, tm);
+      return row;
+    }));
+  }
+  lanes.forEach((l, k) => {
+    const row = box.children[k], a = row.children[1], tm = row.children[2], c = l.cur;
+    let label, time = '';
+    if (c) {
+      label = c.info.album && c.info.album !== c.info.title ? `${c.info.title} · ${c.info.album}` : c.info.title;
+      const pos = Math.max(0, c.el.currentTime - c.start), len = Number.isFinite(c.end) ? c.end - c.start : 0;
+      time = len ? `${fmtTime(pos)} / ${fmtTime(len)}` : fmtTime(pos);
+      if (c.info.link) { if (a.getAttribute('href') !== c.info.link) a.href = c.info.link; }
+      else a.removeAttribute('href');
+    } else {
+      label = engine.blocked && l.next ? 'loaded, waiting for Start audio'
+        : l.next || l.preparing ? 'loading the next track…'
+        : engine.mode === 'files' && !engine.files.length ? 'add files to start' : 'waiting';
+      a.removeAttribute('href');
+    }
+    if (a.textContent !== label) a.textContent = label;
+    if (tm.textContent !== time) tm.textContent = time;
+  });
+}
+function renderNowLine() {
+  const tracks = engine.mode === 'radio' || engine.mode === 'files';
+  let t = engine.lastStarted && engine.lastStarted.lane.cur === engine.lastStarted ? engine.lastStarted : null;
+  if (!t) { const l = engine.lanes.find((x) => x.cur); t = l ? l.cur : null; }
+  const show = tracks && !!t;
+  $('nowLine').hidden = !show;
+  if (show && $('nowTitle').textContent !== t.info.title) $('nowTitle').textContent = t.info.title;
+}
+function addFiles(list) {
+  const ok = /\.(mp3|wav|flac|ogg|oga|m4a|aac|aif|aiff|opus|webm)$/i;
+  const fresh = [...list].filter((f) => (f.type && f.type.startsWith('audio/')) || ok.test(f.name));
+  if (!fresh.length) { toast('None of those are audio files this page can play. MP3, WAV, FLAC, OGG and M4A work.'); return; }
+  for (const f of fresh) {
+    const key = `${f.name}/${f.size}/${f.lastModified}`;
+    if (engine.files.some((x) => x.key === key)) continue;
+    engine.files.push({ key, url: URL.createObjectURL(f), title: f.name.replace(/\.[^.]+$/, ''), album: '', artist: '', link: '', length: 0, cors: false });
+  }
+  engine.bag = [];
+  if (engine.mode !== 'files') setMode('files', true);
+  else { for (const l of engine.lanes) { l.idleUntil = 0; l.tick(); } refreshAudioUI(); }
+  toast(`${engine.files.length} file${engine.files.length === 1 ? '' : 's'} in the list.`, 2200);
+}
+function clearFiles() {
+  for (const f of engine.files) URL.revokeObjectURL(f.url);
+  engine.files = [];
+  engine.bag = [];
+  if (engine.mode === 'files') setMode('files', true);
+  refreshAudioUI();
+}
+
 /* ------------------------------------------------------------------ controls */
 let bare = false, bareHintShown = false;
 function setBare(on) {
@@ -1233,14 +1961,13 @@ function setBare(on) {
   document.body.style.cursor = on ? 'none' : '';
   if (on && !bareHintShown) { bareHintShown = true; toast('Controls hidden. Click or tap the stage, or press H, to bring them back.', 2600); }
 }
+const SHEETS = { eqSheet: 'btnEq', srcSheet: 'btnSources' };
 function toggleSheet(id) {
-  const target = $(id);
-  const opening = target.hidden;
-  for (const s of ['eqSheet', 'liveSheet']) $(s).hidden = true;
-  target.hidden = !opening;
-  $('btnEq').setAttribute('aria-pressed', String(!$('eqSheet').hidden));
-  $('btnLive').setAttribute('aria-pressed', String(!$('liveSheet').hidden));
-  if (opening && id === 'liveSheet') listDevices().catch(() => {});
+  const opening = $(id).hidden;
+  for (const s in SHEETS) { $(s).hidden = true; $(SHEETS[s]).setAttribute('aria-pressed', 'false'); }
+  $(id).hidden = !opening;
+  $(SHEETS[id]).setAttribute('aria-pressed', String(opening));
+  if (opening && id === 'srcSheet') { renderNowPlaying(); if (STANDALONE) listDevices().catch(() => {}); }
 }
 async function toggleFullscreen() {
   try {
@@ -1249,35 +1976,85 @@ async function toggleFullscreen() {
   } catch (e) { toast('Fullscreen isn’t available here. Use the browser’s own fullscreen instead.'); }
 }
 if (document.fullscreenEnabled) $('btnFull').hidden = false;
+if (coarse || !('webkitdirectory' in document.createElement('input'))) $('folderAdd').hidden = true;
 
+$('btnStart').addEventListener('click', unlockAudio);
 $('btnScene').addEventListener('click', nextScene);
 $('btnPresets').addEventListener('click', () => {
   if (!milkdrops.some((md) => md.ok)) { toast('MilkDrop isn’t running in this view, so there are no presets to change.'); return; }
   newPresets(1.5);
 });
-$('btnAudio').addEventListener('click', () => { if (audio.ctx) audio.ctx.resume(); $('fileAudio').click(); });
-$('fileAudio').addEventListener('change', async (e) => {
-  const file = e.target.files && e.target.files[0];
-  e.target.value = '';
-  if (!file || !audio.ctx) return;
-  disconnectSource();
-  const el = new Audio();
-  el.src = URL.createObjectURL(file);
-  el.loop = true;
-  connectSource(audio.ctx.createMediaElementSource(el), true);
-  audio.el = el;
-  audio.label = shortName(file.name);
-  $('btnPlay').hidden = false;
-  try { await audio.ctx.resume(); await el.play(); $('btnPlay').textContent = 'Pause'; }
-  catch (err) { $('btnPlay').textContent = 'Play'; toast('Press Play to start the audio.'); }
+$('btnSources').addEventListener('click', () => toggleSheet('srcSheet'));
+$('btnSkip').addEventListener('click', skipTrack);
+$('btnSkip2').addEventListener('click', skipTrack);
+$('btnPause').addEventListener('click', () => setPaused(!engine.paused));
+for (const b of document.querySelectorAll('#srcSeg [data-mode]')) {
+  b.addEventListener('click', () => {
+    const m = b.dataset.mode;
+    if (m === engine.mode && m !== 'live') return;
+    if (m === 'files' && !engine.files.length) { setMode('files', true); $('fileAudio').click(); return; }
+    setMode(m, true);
+  });
+}
+$('iaQuery').value = typeof prefs.queryText === 'string' ? prefs.queryText : '';
+function applyQuery() {
+  prefs.queryText = $('iaQuery').value.trim();
+  savePrefs();
+  engine.query = iaQueryFrom(prefs.queryText);
+  engine.ia.ids = null;
+  engine.ia.bad.clear();
+  setIaNote('', '');
+  setMode('radio', true);
+}
+$('iaApply').addEventListener('click', applyQuery);
+$('iaQuery').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); applyQuery(); } });
+$('filesAdd').addEventListener('click', () => $('fileAudio').click());
+$('folderAdd').addEventListener('click', () => $('fileFolder').click());
+$('filesClear').addEventListener('click', clearFiles);
+for (const id of ['fileAudio', 'fileFolder']) {
+  $(id).addEventListener('change', (e) => {
+    const files = e.target.files ? [...e.target.files] : [];
+    e.target.value = '';
+    if (files.length) addFiles(files);
+  });
+}
+$('lanes').value = String(engine.laneCount);
+$('lanesOut').textContent = String(engine.laneCount);
+$('lanes').addEventListener('input', () => {
+  engine.laneCount = clamp(parseInt($('lanes').value, 10) || 1, 1, 4);
+  $('lanesOut').textContent = String(engine.laneCount);
+  prefs.lanes = engine.laneCount;
+  savePrefs();
+  if (engine.mode === 'radio' || engine.mode === 'files') buildLanes();
+  refreshAudioUI();
 });
-$('btnPlay').addEventListener('click', async () => {
-  if (!audio.el) return;
-  if (audio.el.paused) {
-    try { await audio.ctx.resume(); await audio.el.play(); } catch (e) { toast(`Playback was blocked (${e.message}).`); }
-  } else audio.el.pause();
-  $('btnPlay').textContent = audio.el.paused ? 'Play' : 'Pause';
+$('xfade').value = String(engine.fade);
+$('xfadeOut').textContent = `${engine.fade} s`;
+$('xfade').addEventListener('input', () => {
+  engine.fade = clamp(parseFloat($('xfade').value) || 0, 0, 12);
+  $('xfadeOut').textContent = `${engine.fade} s`;
+  prefs.fade = engine.fade;
+  savePrefs();
 });
+$('vol').value = String(engine.volume);
+$('volOut').textContent = `${Math.round(engine.volume * 100)}%`;
+$('vol').addEventListener('input', () => {
+  engine.volume = clamp(parseFloat($('vol').value) || 0, 0, 1);
+  $('volOut').textContent = `${Math.round(engine.volume * 100)}%`;
+  if (audio.out) audio.out.gain.setTargetAtTime(engine.volume, audio.ctx.currentTime, 0.05);
+  prefs.volume = engine.volume;
+  savePrefs();
+});
+$('audioStart').addEventListener('click', () => {
+  if (engine.mode === 'live' && engine.live.stream) { setMode('off', true); return; }
+  if (engine.mode !== 'live') setMode('live', true);
+  else startLive(true);
+});
+$('audioDev').addEventListener('change', () => {
+  engine.live.deviceId = $('audioDev').value;
+  if (engine.mode === 'live' && engine.live.stream) { dropLiveStream(); startLive(true); }
+});
+$('videoDev').addEventListener('change', () => { if (video.stream) { releaseVideo(); startCamera(false); } });
 $('btnVideo').addEventListener('click', () => { if (video.active) stopVideo(); else $('fileVideo').click(); });
 $('fileVideo').addEventListener('change', async (e) => {
   const file = e.target.files && e.target.files[0];
@@ -1289,12 +2066,10 @@ $('fileVideo').addEventListener('change', async (e) => {
   el.src = video.url;
   video.el = el;
   try { await el.play(); showVideo(el); toast(`${shortName(file.name)} is now on the Stream plane.`); }
-  catch (err) { stopVideo(); toast(`That video wouldn’t play (${err.message}). An MP4 with H.264 works everywhere.`); }
+  catch (err) { releaseVideo(); toast(`That video wouldn’t play (${err.message}). An MP4 with H.264 works everywhere.`); }
 });
-$('btnLive').addEventListener('click', () => toggleSheet('liveSheet'));
-$('audioStart').addEventListener('click', startLiveAudio);
-$('videoStart').addEventListener('click', startCamera);
-$('midiStart').addEventListener('click', startMidi);
+$('videoStart').addEventListener('click', () => startCamera(true));
+$('midiStart').addEventListener('click', () => startMidi(true));
 $('btnEq').addEventListener('click', () => toggleSheet('eqSheet'));
 $('btnHide').addEventListener('click', () => setBare(true));
 $('btnFull').addEventListener('click', toggleFullscreen);
@@ -1345,6 +2120,7 @@ window.addEventListener('keydown', (e) => {
   if (k === 'h') setBare(!bare);
   else if (k === 'n') newPresets(1.5);
   else if (k === 's') nextScene();
+  else if (k === 'k') skipTrack();
   else if (k === 'e') { if (bare) setBare(false); toggleSheet('eqSheet'); }
   else if (k === 'f') toggleFullscreen();
 });
@@ -1364,7 +2140,9 @@ function hud(dt) {
   if (hudClock < 0.25) return;
   hudClock = 0;
   $('fpsLabel').textContent = `${Math.round(fps)} fps`;
-  $('audioLabel').textContent = audio.label;
+  $('audioLabel').textContent = audioLabelText();
+  renderNowLine();
+  if (!$('srcSheet').hidden) renderNowPlaying();
   if (midi.last) $('midiLabel').textContent = midi.last;
 }
 function frame(now) {
@@ -1377,6 +2155,7 @@ function frame(now) {
   resize();
   updateAudio(dt);
   updateMidi(dt);
+  engine.newtrack *= Math.exp(-dt * 1.2);
   fillInputs(simTime, dt, fps, frames);
   evaluate();
 
@@ -1400,8 +2179,28 @@ function frame(now) {
   autoCycle(dt);
 }
 
+// The audio engine runs on its own clock, so it keeps going when the tab is in the background.
+setInterval(() => {
+  for (const l of engine.lanes) l.tick();
+  ctxWatch();
+}, 250);
+
+async function bootSources() {
+  const m = prefs.mode;
+  if (!STANDALONE) { setMode('off', false); return; }
+  if (m === 'off' || m === 'files') setMode(m, false);
+  else if (m === 'live') {
+    const s = await permState('microphone');
+    setMode('live', false, s === 'granted');
+  } else setMode('radio', false);     // first visit, or radio last time
+  if (prefs.video === 'camera' && (await permState('camera')) === 'granted') startCamera(false);
+  if (prefs.midi && navigator.requestMIDIAccess && (await permState('midi')) === 'granted') startMidi(false);
+}
+refreshAudioUI();
+bootSources();
+
 window.nestedDimensions = {
-  EQ, state, planes, milkdrops,
+  EQ, state, planes, milkdrops, engine, audio, setMode, skipTrack, setPaused,
   get fps() { return fps; }, get frames() { return frames; },
 };
 window.__ndReady = true;

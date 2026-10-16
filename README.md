@@ -6,14 +6,33 @@ By xik6 (William Victor Newbold).
 
 **Open it:** https://m8w.github.io/nested-dimensions/
 
-## What v0.1 does
+## What it does
 
 - **Four screens in one 3D scene.** Two MilkDrop planes run real presets through Butterchurn. The Stream plane takes video (your fractal stream, a camera or a file) and shows a Julia-set fractal until one is connected. The Nested plane shows the previous frame, so the whole scene repeats inside itself, frame within frame.
-- **Equations.** The camera and each plane run a small MilkDrop-flavoured program every frame that sets position, rotation, scale, opacity and glow from time, audio and MIDI. Edit them live in the page.
+- **Nonstop audio (v0.2).** Archive radio plays the xik6 catalog from archive.org at random, crossfaded, on up to four lanes at once. It also plays your own files, shuffled, or follows a live input that reconnects by itself.
+- **Equations.** The camera and each plane run a small MilkDrop-flavoured program every frame that sets position, rotation, scale, opacity and glow from time, audio, tracks and MIDI. Edit them live in the page.
 - **Trails.** MilkDrop-style feedback behind everything: each frame zooms, turns and fades the last one.
 - **Four scenes:** orbit, stack, tunnel, lissajous.
-- **Inputs:** audio file and video file anywhere; live audio (BlackHole, a mic), live video (OBS Virtual Camera, a webcam) and Web MIDI where the browser allows them.
+- **Video and MIDI:** video files anywhere; live video (OBS Virtual Camera, a webcam) and Web MIDI where the browser allows them.
 - **Scene files.** A scene is plain JSON, so it can be saved, shared, generated and sequenced.
+
+## Nonstop audio
+
+Open **Sources** and pick one:
+
+- **Archive radio** (the default). The page searches archive.org for the uploads of William Victor Newbold (about 580 audio items) and plays them at random, track after track. It favours tracks the device hasn't played yet and keeps that history between visits. Recordings longer than 20 minutes play an 8–14 minute stretch from a random point, so the 10-hour sessions turn up as excerpts. Type another creator name, or any archive.org search such as `collection:something`, into the Search box to play other uploads.
+- **My files.** Add files, or a whole folder on a computer. They play shuffled, each once before any repeats. Browsers can't keep files between visits, so the list empties on reload.
+- **Live input.** Follows BlackHole or a mic for the visuals and never sends it to the speakers. If the device drops, the page reconnects within a few seconds. Once the browser has allowed the input, it reconnects by itself after a reload.
+
+How it keeps going:
+
+- **Crossfades.** Each lane loads its next track 40 seconds before the current one ends, then crossfades with an equal-power curve (0–12 s, default 6).
+- **Lanes.** Up to four lanes play at once, each on its own random path, mixed through a compressor.
+- **Recovery.** If a file won't load, the page tries the item's other archive.org servers, then moves on to another track. A track that stalls for 15 seconds is replaced. A slow or missing archive.org falls back to the last catalog list the page saved.
+- **Background.** The audio runs on its own clock, so it keeps going in a background tab. On a phone the page keeps the screen awake while sound is playing, and lock-screen controls can pause or skip.
+- **Starting.** Browsers hold sound back until the first tap or key press. If that happens, a **Start audio** button appears, and the first track has already loaded by then. On a dedicated broadcast machine, start Chrome with `--autoplay-policy=no-user-gesture-required` so it starts by itself.
+
+Each new track also brings a new MilkDrop preset on one plane. The equations can follow the music through `track`, `trackpos`, `newtrack` and `lanes`.
 
 ## Running it
 
@@ -23,12 +42,14 @@ By xik6 (William Victor Newbold).
 
 ## With a streaming rig
 
-1. **Audio:** Live inputs → Audio in → BlackHole (or whichever device carries the mix) → Listen. The bands drive the equations and both MilkDrop planes.
-2. **Video:** bring the fractal stream into OBS and start the Virtual Camera. In OBS 30 or later the virtual camera can output a single source, so pick the fractal source there. Then Live inputs → Video in → OBS Virtual Camera → Start. It lands on the Stream plane.
-3. **MIDI:** Live inputs → MIDI → Connect, in Chrome or Edge. Every MIDI input is heard, IAC buses included. Notes and controllers arrive as `note`, `vel`, `onset`, `held` and `cc1`–`cc16`.
+1. **Audio:** Sources → Live input → choose BlackHole (or whichever device carries the mix) → Listen. Or let Archive radio play the catalog. The bands drive the equations and both MilkDrop planes.
+2. **Video:** bring the fractal stream into OBS and start the Virtual Camera. In OBS 30 or later the virtual camera can output a single source, so pick the fractal source there. Then Sources → Camera → OBS Virtual Camera → Start. It lands on the Stream plane and reconnects if OBS restarts the camera.
+3. **MIDI:** Sources → MIDI → Connect, in Chrome or Edge. Every MIDI input is heard, IAC buses included. Notes and controllers arrive as `note`, `vel`, `onset`, `held` and `cc1`–`cc16`.
 4. Press **H** to hide the controls and **F** for fullscreen, then capture the browser window in OBS.
 
-Keys: **H** controls · **F** fullscreen · **S** next scene · **N** new MilkDrop presets · **E** equations · **Ctrl/⌘ + Enter** apply an edit.
+The page remembers the audio source, camera and MIDI, so after a reload (or an 11:45 cycle restart) it reconnects everything the browser has already allowed.
+
+Keys: **H** controls · **F** fullscreen · **S** next scene · **N** new MilkDrop presets · **K** skip track · **E** equations · **Ctrl/⌘ + Enter** apply an edit.
 
 ## The equation language
 
@@ -54,6 +75,8 @@ sx = 1.9 + bass*0.2; sy = sx;
 | `bass_att`, `mid_att`, `treb_att`, `vol` | smoothed bands, and the average of the three |
 | `note`, `vel`, `onset`, `held` | last MIDI note and velocity (0–1); `onset` jumps to 1 on each note and fades; notes held |
 | `cc1` – `cc16` | MIDI controller values (0–1) |
+| `track`, `trackpos` | seconds into the newest track, and how far through it (0–1) |
+| `newtrack`, `lanes` | a pulse that jumps to 1 when any track starts and fades; lanes playing |
 | `i`, `n`, `aspect` | plane number (0 MilkDrop A, 1 Stream, 2 MilkDrop B, 3 Nested), plane count, screen width ÷ height |
 | `pi`, `tau` | constants |
 | `q1` – `q8` | set in the Camera block, readable in every plane |
