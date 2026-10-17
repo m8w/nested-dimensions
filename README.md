@@ -66,14 +66,19 @@ To put the launcher on your Desktop, paste this into Terminal once:
 curl -fsSL https://m8w.github.io/nested-dimensions/launch/install-mac.sh | bash
 ```
 
-Then double-click **Nested Dimensions** on the Desktop. It opens the page in its own Chrome window (Edge, Brave or Chromium also work) where:
+Then double-click **Nested Dimensions** on the Desktop. It opens the page fullscreen in its own Chrome window (Edge, Brave or Chromium also work), where:
 
 - sound starts by itself, with no Start audio tap;
 - the page keeps full speed even when another window covers it;
 - the Mac stays awake while it runs;
 - the window opens again if the browser closes or crashes.
 
-It uses its own browser profile, so your everyday Chrome is untouched. Allow the microphone, camera or MIDI in that window once, and it remembers. Press Control-C in its Terminal window to stop it. The launcher itself is [`launch/Nested Dimensions.command`](launch/Nested%20Dimensions.command); it opens a 1920 × 1080 window by default, which you can change with `ND_WIDTH` and `ND_HEIGHT`, or set `ND_FULL=1` for fullscreen.
+It uses its own browser profile, so your everyday Chrome is untouched. macOS opens that browser as its own app, so the microphone, camera and MIDI permissions belong to Chrome; Terminal never asks for them. Allow them in that window once, and it remembers.
+
+- **Get to it:** Command-Tab to the second Chrome icon, or click it in the Dock. If it isn't fullscreen, press Control-Command-F.
+- **Stop it:** press Control-C in the launcher's Terminal window. Only that window; other Terminal windows keep running.
+- **Update it:** run the install line again.
+- **Settings:** the launcher is [`launch/Nested Dimensions.command`](launch/Nested%20Dimensions.command). Set `ND_WINDOW=1` for a window instead of fullscreen, and `ND_WIDTH` and `ND_HEIGHT` for the window size.
 
 ## Running it
 

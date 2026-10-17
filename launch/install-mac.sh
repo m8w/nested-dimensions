@@ -1,9 +1,9 @@
 #!/bin/bash
 # Puts the Nested Dimensions launcher on your Desktop, ready to double-click.
-# Run this in Terminal:
+# Run this in Terminal (running it again updates the launcher):
 #   curl -fsSL https://m8w.github.io/nested-dimensions/launch/install-mac.sh | bash
 set -e
-SRC="https://m8w.github.io/nested-dimensions/launch/Nested%20Dimensions.command"
+SRC="https://m8w.github.io/nested-dimensions/launch/Nested%20Dimensions.command?v=$(date +%s)"
 DEST="$HOME/Desktop/Nested Dimensions.command"
 curl -fsSL "$SRC" -o "$DEST"
 chmod +x "$DEST"
