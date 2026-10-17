@@ -178,7 +178,7 @@ input[type="text"]::placeholder { color: var(--dim); opacity: 0.8; }
 
 <header class="mast" id="mast">
   <div class="plate ident">
-    <div class="wordmark">nested dimensions<small>v0.2</small></div>
+    <div class="wordmark">nested dimensions<small>v0.3</small></div>
     <div class="readout"><b id="sceneLabel">orbit</b> · <span id="fpsLabel">-- fps</span> · <span id="audioLabel">no audio</span></div>
     <div class="now" id="nowLine" hidden><b>♪</b><span id="nowTitle"></span></div>
     <div class="presets">
@@ -218,8 +218,10 @@ input[type="text"]::placeholder { color: var(--dim); opacity: 0.8; }
         <dt>track, trackpos, newtrack, lanes</dt><dd>seconds into the newest track, how far through it (0–1), a pulse that jumps to 1 when any track starts and fades, lanes playing</dd>
         <dt>i, n, aspect</dt><dd>plane number (0 MilkDrop A, 1 Stream, 2 MilkDrop B, 3 Nested), plane count, screen width ÷ height</dd>
         <dt>q1 – q8</dt><dd>set in the Camera block, readable in every plane</dd>
-        <dt>plane outputs</dt><dd>x y z position · rx ry rz rotation in radians · sx sy scale · a opacity · add 1 for additive glow · bright gain</dd>
+        <dt>plane outputs</dt><dd>x y z position · rx ry rz rotation in radians · sx sy scale (sz follows them unless set) · a opacity · add 1 for additive glow · bright gain</dd>
+        <dt>solid outputs</dt><dd>depth: 0 a flat screen, 0.9 about a cube · round: 0 a box, 1 a sphere · relief: the picture’s brightness pushes the surface out (0.1 gentle, 0.5 strong, negative carves in)</dd>
         <dt>camera outputs</dt><dd>cx cy cz position · tx ty tz target · fov in degrees · roll · fit distance multiplier · zoom, rot, decay for trails (decay 0 turns them off)</dd>
+        <dt>background outputs</dt><dd>set in the Camera block: bg brightness (1 = the level slider, 0 hides it) · bgzoom · bgrot in radians · bgx bgy pan</dd>
         <dt>functions</dt><dd>sin cos tan asin acos atan atan2 abs sqrt sqr pow exp log log10 floor ceil int min max sign clamp mix fract tri noise rand frand above below equal band bor bnot if(test, a, b)</dd>
         <dt>syntax</dt><dd>statements end with ; · ^ is power · // starts a comment · any new name is a variable that keeps its value between frames · paste scene JSON here and press Apply to load it</dd>
       </dl>
@@ -261,7 +263,23 @@ input[type="text"]::placeholder { color: var(--dim); opacity: 0.8; }
       </div>
     </div>
     <div class="sec">
-      <h3>Video</h3>
+      <h3>Background</h3>
+      <div class="seg" id="bgSeg" role="radiogroup" aria-label="Background">
+        <button type="button" role="radio" aria-checked="false" data-bg="archive" data-standalone>Archive video</button>
+        <button type="button" role="radio" aria-checked="false" data-bg="files">My videos</button>
+        <button type="button" role="radio" aria-checked="false" data-bg="shader">Shader</button>
+        <button type="button" role="radio" aria-checked="false" data-bg="off">Off</button>
+      </div>
+      <p class="hint" id="bgHint"></p>
+      <div class="status" id="bgStatus" role="status"></div>
+      <div class="rows">
+        <label class="row" for="bgLevel"><span>level</span><input type="range" id="bgLevel" min="0" max="1" step="0.01" value="0.8"><output id="bgLevelOut" for="bgLevel">80%</output></label>
+      </div>
+      <div class="np" id="bgNow" hidden><div><span class="n">▸</span><a class="t" target="_blank" rel="noopener"></a><span class="tm"></span></div></div>
+      <div class="actions"><button class="key" id="bgNext" type="button">Next clip</button><button class="key" id="bgAdd" type="button">Add videos</button></div>
+    </div>
+    <div class="sec">
+      <h3>Stream plane</h3>
       <div class="field" data-standalone><label for="videoDev">Camera</label><select id="videoDev"><option value="">Default camera</option></select><button class="key" id="videoStart" type="button">Start</button></div>
       <div class="actions"><button class="key" id="btnVideo" type="button">Video file</button></div>
       <p class="hint" data-standalone>Pick OBS Virtual Camera to put the fractal stream on the Stream plane. It reconnects by itself if OBS restarts the camera.</p>
@@ -286,6 +304,7 @@ input[type="text"]::placeholder { color: var(--dim); opacity: 0.8; }
   <input type="file" id="fileAudio" accept="audio/*,.mp3,.wav,.flac,.ogg,.m4a,.aif,.aiff,.opus" multiple hidden>
   <input type="file" id="fileFolder" webkitdirectory multiple hidden>
   <input type="file" id="fileVideo" accept="video/*" hidden>
+  <input type="file" id="fileBg" accept="video/*,.mp4,.mov,.m4v,.webm" multiple hidden>
   <input type="file" id="fileScene" accept=".json,application/json" hidden>
 </nav>
 
@@ -537,17 +556,24 @@ const SCENES = [
       'fov = 55;',
       '// MilkDrop-style trails behind everything',
       'zoom = 1.012; rot = 0.0015; decay = 0.88;',
+      '// the background drifts against the camera, for depth',
+      'bgx = -cx*0.015; bgzoom = 1.08 + bass_att*0.02;',
       '// q1 - q8 are passed on to every plane',
       'q1 = time*0.22 + bass_att*0.2;'),
     planes: trio(lines(
-      '// Three screens orbit the nested plane.',
+      '// Three solids orbit the nested screen, each breathing between screen, cube and sphere.',
       'ph = q1 + i*tau/3;',
       'x = cos(ph)*3;',
       'z = sin(ph)*3;',
       'y = sin(time*0.4 + i*1.7)*0.45;',
-      'ry = pi/2 - ph;',
-      'rx = sin(time*0.3 + i)*0.15;',
-      'sx = 1.9 + bass*0.15; sy = sx;',
+      'ry = pi/2 - ph + time*0.23;',
+      'rx = sin(time*0.3 + i)*0.35;',
+      'sx = 1.5 + bass*0.12; sy = sx;',
+      '// depth: 0 flat screen, 0.9 a cube · round: 0 box, 1 sphere',
+      'depth = 0.9*(0.5 + 0.5*sin(time*0.11 + i*2.1));',
+      'round = 0.5 + 0.5*sin(time*0.07 + i*1.3);',
+      '// relief: the picture\'s brightness pushes the surface out',
+      'relief = 0.06 + 0.1*bass_att;',
       'bright = 1 + onset*0.5;'), lines(
       '// The whole scene, fed back into itself. Its slow spin turns the recursion into a spiral.',
       'ry = sin(time*0.11)*0.45;',
@@ -563,6 +589,7 @@ const SCENES = [
       'cz = 5 + cos(time*0.11)*1.5;',
       'fov = 52;',
       'decay = 0;',
+      'bgx = -cx*0.012; bgy = cy*0.01; bgzoom = 1.1;',
       'q1 = 0.5 + 0.45*sin(time*0.2) + bass_att*0.3;'),
     planes: trio(lines(
       '// Three layers stacked in depth, breathing apart. Additive, like an OBS blend.',
@@ -589,15 +616,18 @@ const SCENES = [
       'roll = sin(time*0.05)*0.3;',
       '// trails zoom outward like a MilkDrop tunnel',
       'zoom = 1.03 + bass*0.01; rot = 0.004; decay = 0.9;',
+      'bgzoom = 1.15 + 0.08*sin(time*0.05); bgrot = time*0.004;',
       'q1 = time*0.09;'),
     planes: trio(lines(
-      '// Each screen travels from far away to just past you, then loops.',
+      '// Each solid travels from far away to just past you, tumbling, then loops.',
       'd = fract(q1 + i/3);',
       'z = -14 + d*18;',
       'x = sin(time*0.3 + i*2.1)*1.4*(1 - d);',
       'y = cos(time*0.23 + i*1.3)*0.8*(1 - d);',
       'rz = time*0.15*(i - 1) + d*1.5;',
-      'sx = 1.4; sy = 1.4;',
+      'rx = time*0.27 + i; ry = time*0.19*(i + 1);',
+      'sx = 1.2; sy = 1.2;',
+      'depth = 1.05; round = 0.5 + 0.5*sin(time*0.13 + i*2);',
       'a = min(d*5, 1)*min((1 - d)*8, 1);'), lines(
       '// A far window that holds the whole tunnel.',
       'z = -12;',
@@ -613,17 +643,20 @@ const SCENES = [
       'cy = sin(time*0.06)*1.2;',
       'cz = 6 + cos(time*0.09)*3;',
       'fov = 55;',
-      'zoom = 0.996; rot = -0.002; decay = 0.82;'),
+      'zoom = 0.996; rot = -0.002; decay = 0.82;',
+      'bgx = -cx*0.015; bgrot = sin(time*0.03)*0.1; bgzoom = 1.1;'),
     planes: trio(lines(
-      '// Lissajous drift: each screen on its own frequency ratio.',
+      '// Lissajous drift: each solid on its own frequency ratio, its surface raised by its own picture.',
       'k = i + 1;',
       'x = sin(time*0.31*k + i)*2.8;',
       'y = sin(time*0.33*k + i*2)*1.3;',
       'z = cos(time*0.23*k)*1.8;',
       'rx = time*0.21*k;',
       'ry = time*0.13*(k + 1);',
-      'sx = 1.4 + 0.3*sin(time*0.8 + i) + bass*0.12; sy = sx;',
-      'a = 0.85;'), lines(
+      'sx = 1.2 + 0.25*sin(time*0.8 + i) + bass*0.1; sy = sx;',
+      'depth = 0.9; round = 0.5 + 0.5*sin(time*0.09 + i*2.3);',
+      'relief = 0.12 + 0.18*mid_att;',
+      'a = 0.9;'), lines(
       '// A backdrop that keeps the scene\'s echo.',
       'z = -3;',
       'sx = 3.6; sy = 3.6;',
@@ -643,7 +676,7 @@ try {
 }
 renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
 renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, coarse ? 1.5 : 2));
-renderer.setClearColor(0x000000, 1);
+renderer.setClearColor(0x000000, 0);   // alpha in the scene buffer records what the 3D scene covers
 
 const SAMPLES = coarse ? 2 : 4;
 const makeRT = () => new THREE.WebGLRenderTarget(4, 4, {
@@ -652,12 +685,6 @@ const makeRT = () => new THREE.WebGLRenderTarget(4, 4, {
 });
 let rtRead = makeRT(), rtWrite = makeRT();
 
-const PLANE_VS = `
-varying vec2 vUv;
-void main() {
-  vUv = uv;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-}`;
 const FULL_VS = `
 varying vec2 vUv;
 void main() {
@@ -677,27 +704,115 @@ void main() {
   p = vec2(c * p.x - s * p.y, s * p.x + c * p.y) / max(uZoom, 0.01);
   vec2 uv = p / vec2(uAspect, 1.0) + 0.5;
   float inside = step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
-  vec3 col = max(texture2D(tPrev, uv).rgb * uDecay - 0.0035, 0.0) * inside;
-  gl_FragColor = vec4(col, 1.0);
+  vec4 prev = texture2D(tPrev, uv);
+  vec3 col = max(prev.rgb * uDecay - 0.0035, 0.0) * inside;
+  gl_FragColor = vec4(col, prev.a * uDecay * inside);
 }`;
+// Final pass: the 3D scene over a background that fills whatever the scene leaves dark.
 const BLIT_FS = `
 uniform sampler2D tMap;
+uniform sampler2D tBgA;
+uniform sampler2D tBgB;
+uniform float uMix;
+uniform float uVid;
+uniform float uShader;
+uniform float uLevel;
+uniform vec2 uFitA;
+uniform vec2 uFitB;
+uniform float uZoom;
+uniform float uRot;
+uniform vec2 uPan;
+uniform float uAspect;
+uniform float uTime;
+uniform float uBass;
 varying vec2 vUv;
+
+vec2 place(vec2 uv) {
+  vec2 p = (uv - 0.5) * vec2(uAspect, 1.0);
+  float c = cos(uRot), s = sin(uRot);
+  p = vec2(c * p.x - s * p.y, s * p.x + c * p.y) / max(uZoom, 0.05);
+  return p / vec2(uAspect, 1.0) + uPan;
+}
+// mirror at the edges, so zoomed-out or panned video tiles instead of running off
+vec2 mirror(vec2 p) { return abs(mod(p + 1.0, 2.0) - 1.0); }
+
+vec3 nebula(vec2 p) {
+  vec2 q = p * vec2(uAspect, 1.0) * 2.4;
+  float t = uTime * 0.05;
+  for (int k = 1; k < 6; k++) {
+    float fk = float(k);
+    q += 0.45 / fk * vec2(sin(q.y * fk * 1.3 + t * fk + 1.7), cos(q.x * fk * 1.1 - t * 1.3 + 0.6));
+  }
+  float v = 0.5 + 0.5 * sin(q.x * 1.6 + q.y * 1.2 + t);
+  float w = 0.5 + 0.5 * cos(length(q) * 2.0 - t * 2.0);
+  vec3 col = 0.5 + 0.5 * cos(6.28318 * (v * 0.7 + w * 0.3 + t * 0.2 + vec3(0.62, 0.42, 0.85)));
+  return col * (0.16 + 0.5 * v * w) * (1.0 + uBass * 0.12);
+}
+
 void main() {
-  gl_FragColor = vec4(texture2D(tMap, vUv).rgb, 1.0);
+  vec3 scene = texture2D(tMap, vUv).rgb;
+  vec2 p = place(vUv);
+  vec3 bg = vec3(0.0);
+  if (uShader > 0.5 && uVid < 0.999) bg = nebula(p);
+  if (uVid > 0.001) {
+    vec3 a = texture2D(tBgA, mirror((p - 0.5) * uFitA + 0.5)).rgb;
+    vec3 b = texture2D(tBgB, mirror((p - 0.5) * uFitB + 0.5)).rgb;
+    bg = mix(bg, mix(a, b, uMix), uVid);
+  }
+  // fill where the scene covers nothing; inside the solids, let a little through their darkest parts
+  float cover = texture2D(tMap, vUv).a;
+  float lum = dot(scene, vec3(0.2126, 0.7152, 0.0722));
+  float hole = (1.0 - cover) + cover * (1.0 - smoothstep(0.0, 0.18, lum)) * 0.35;
+  gl_FragColor = vec4(scene + bg * uLevel * hole, 1.0);
 }`;
-// The nested plane: last frame, slightly dimmed so the recursion recedes, inside a thin gold frame
-const NEST_FS = `
-uniform sampler2D tMap;
+// Every screen is one mesh that can be a flat screen, a box or a sphere, with the picture on every face.
+// Its width and height follow the picture's proportions, and the picture's brightness can push the
+// surface outward (relief), so the 2D image shapes the solid.
+const SCREEN_VS = `
+uniform sampler2D map;
+uniform vec2 uSize;
+uniform float uDepth;
+uniform float uRound;
+uniform float uRelief;
+varying vec2 vUv;
+varying float vShade;
+void main() {
+  vUv = uv;
+  vec3 p = position;                       // a unit cube, -0.5 to 0.5
+  vec3 box = p * vec3(uSize, max(uDepth, 0.0005));
+  vec3 dir = normalize(p);
+  vec3 sphere = dir * 0.58 * sqrt(uSize.x * uSize.y);
+  vec3 pos = mix(box, sphere, uRound);
+  vec3 n = normalize(mix(normal, dir, uRound));
+  if (uRelief != 0.0) pos += n * dot(texture2D(map, uv).rgb, vec3(0.299, 0.587, 0.114)) * uRelief;
+  vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+  float facing = abs(dot(normalize(normalMatrix * n), normalize(-mv.xyz)));
+  float solid = clamp(uDepth * 1.5 + uRound + abs(uRelief) * 3.0, 0.0, 1.0);
+  vShade = mix(1.0, 0.4 + 0.6 * facing, solid * 0.85);
+  gl_Position = projectionMatrix * mv;
+}`;
+const SCREEN_FS = `
+uniform sampler2D map;
+uniform vec2 uSize;
 uniform float uAlpha;
 uniform float uBright;
+uniform float uFrame;
 varying vec2 vUv;
+varying float vShade;
 void main() {
-  vec3 col = texture2D(tMap, vUv).rgb * 0.9 * uBright;
-  vec2 d = min(vUv, 1.0 - vUv) * vec2(1.6, 0.9);
-  float edge = smoothstep(0.024, 0.014, min(d.x, d.y));
-  col = mix(col + vec3(0.03, 0.02, 0.055), vec3(1.0, 0.7, 0.28), edge);
-  gl_FragColor = vec4(col, uAlpha);
+  vec4 tex = texture2D(map, vUv);
+  vec3 col = tex.rgb * uBright;
+  float a = uAlpha;
+  if (uFrame > 0.5) {
+    // the nested screen: dimmed a little so the recursion recedes, inside a thin gold frame;
+    // where the recorded frame was empty it stays open, so the background shows inside it too
+    col *= 0.9;
+    vec2 d = min(vUv, 1.0 - vUv) * uSize;
+    float edge = smoothstep(0.024, 0.014, min(d.x, d.y));
+    col = mix(col + vec3(0.03, 0.02, 0.055), vec3(1.0, 0.7, 0.28), edge);
+    a *= max(tex.a, edge);
+  }
+  gl_FragColor = vec4(col * vShade, a);
 }`;
 const PROC_FS = `
 uniform float uTime;
@@ -762,8 +877,10 @@ void main() {
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(52, 16 / 9, 0.05, 200);
-const PLANE_GEO = new THREE.PlaneGeometry(1.6, 0.9);
+const SCREEN_GEO = coarse ? new THREE.BoxGeometry(1, 1, 1, 32, 18, 18) : new THREE.BoxGeometry(1, 1, 1, 48, 28, 28);
 const FULL_GEO = new THREE.PlaneGeometry(2, 2);
+const BLACK_TEX = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1);
+BLACK_TEX.needsUpdate = true;
 
 const trailMat = new THREE.ShaderMaterial({
   uniforms: { tPrev: { value: rtRead.texture }, uZoom: { value: 1 }, uRot: { value: 0 }, uDecay: { value: 0 }, uAspect: { value: 16 / 9 } },
@@ -774,32 +891,61 @@ trail.frustumCulled = false;
 trail.renderOrder = -1000;
 scene.add(trail);
 
-const procMats = [];
-function makeProcMaterial(mode) {
-  const m = new THREE.ShaderMaterial({
+// The built-in shaders (the Julia stand-in for the stream, the MilkDrop stand-ins) render into small
+// textures, so every screen is fed the same way: a picture on a solid.
+const PROC_W = coarse ? 384 : 640, PROC_H = Math.round(PROC_W * 9 / 16);
+const procScene = new THREE.Scene();
+const procQuad = new THREE.Mesh(FULL_GEO, new THREE.MeshBasicMaterial());
+procQuad.frustumCulled = false;
+procScene.add(procQuad);
+const procs = [];
+function makeProc(mode) {
+  const mat = new THREE.ShaderMaterial({
     uniforms: { uTime: { value: 0 }, uMode: { value: mode }, uAlpha: { value: 1 }, uBright: { value: 1 }, uBass: { value: 0 } },
-    vertexShader: PLANE_VS, fragmentShader: PROC_FS, transparent: true, depthWrite: false, side: THREE.DoubleSide,
+    vertexShader: FULL_VS, fragmentShader: PROC_FS, depthTest: false, depthWrite: false,
   });
-  procMats.push(m);
-  return m;
+  const rt = new THREE.WebGLRenderTarget(PROC_W, PROC_H, {
+    depthBuffer: false, generateMipmaps: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
+  });
+  const proc = { mat, rt, tex: rt.texture };
+  procs.push(proc);
+  return proc;
 }
-const procStream = makeProcMaterial(0);
-const nestMat = new THREE.ShaderMaterial({
-  uniforms: { tMap: { value: rtRead.texture }, uAlpha: { value: 1 }, uBright: { value: 1 } },
-  vertexShader: PLANE_VS, fragmentShader: NEST_FS, transparent: true, depthWrite: false, side: THREE.DoubleSide,
-});
+const procStream = makeProc(0);
 
 const planes = {};
 for (const key of PLANE_KEYS) {
-  const mesh = new THREE.Mesh(PLANE_GEO, procStream);
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      map: { value: BLACK_TEX }, uSize: { value: new THREE.Vector2(1.6, 0.9) }, uDepth: { value: 0 }, uRound: { value: 0 },
+      uRelief: { value: 0 }, uAlpha: { value: 1 }, uBright: { value: 1 }, uFrame: { value: key === 'nest' ? 1 : 0 },
+    },
+    vertexShader: SCREEN_VS, fragmentShader: SCREEN_FS, transparent: true, depthWrite: false, side: THREE.FrontSide,
+  });
+  const mesh = new THREE.Mesh(SCREEN_GEO, mat);
+  mesh.frustumCulled = false;      // the shader reshapes it beyond the cube's bounds
   scene.add(mesh);
-  planes[key] = { key, mesh };
+  planes[key] = { key, mesh, mat, srcAspect: 16 / 9 };
 }
-planes.stream.mesh.material = procStream;
-planes.nest.mesh.material = nestMat;
+// Point a screen at a picture. The solid's proportions follow the picture's, kept between portrait and wide.
+function setScreen(key, tex, srcAspect) {
+  const p = planes[key];
+  p.mat.uniforms.map.value = tex || BLACK_TEX;
+  p.srcAspect = clamp(srcAspect || 16 / 9, 0.6, 2.4);
+}
+setScreen('stream', procStream.tex, 16 / 9);
 
 const blitScene = new THREE.Scene();
-const blitMat = new THREE.ShaderMaterial({ uniforms: { tMap: { value: null } }, vertexShader: FULL_VS, fragmentShader: BLIT_FS, depthTest: false, depthWrite: false });
+const blitMat = new THREE.ShaderMaterial({
+  uniforms: {
+    tMap: { value: null }, tBgA: { value: BLACK_TEX }, tBgB: { value: BLACK_TEX },
+    uMix: { value: 0 }, uVid: { value: 0 }, uShader: { value: 0 }, uLevel: { value: 0 },
+    uFitA: { value: new THREE.Vector2(1, 1) }, uFitB: { value: new THREE.Vector2(1, 1) },
+    uZoom: { value: 1 }, uRot: { value: 0 }, uPan: { value: new THREE.Vector2(0.5, 0.5) },
+    uAspect: { value: 16 / 9 }, uTime: { value: 0 }, uBass: { value: 0 },
+  },
+  vertexShader: FULL_VS, fragmentShader: BLIT_FS, depthTest: false, depthWrite: false,
+});
 const blit = new THREE.Mesh(FULL_GEO, blitMat);
 blit.frustumCulled = false;
 blitScene.add(blit);
@@ -1517,7 +1663,7 @@ const MD_W = coarse ? 640 : 960, MD_H = coarse ? 360 : 540;
 
 const milkdrops = [];
 function initMilkdrop(key, mode) {
-  const md = { key, ok: false, viz: null, tex: null, material: null, fallback: makeProcMaterial(mode), name: '' };
+  const md = { key, ok: false, viz: null, tex: null, fallback: makeProc(mode), name: '' };
   if (BC && audio.ctx && PRESET_NAMES.length) {
     try {
       const canvas = document.createElement('canvas');
@@ -1529,7 +1675,6 @@ function initMilkdrop(key, mode) {
       md.tex = new THREE.CanvasTexture(canvas);
       md.tex.minFilter = THREE.LinearFilter;
       md.tex.generateMipmaps = false;
-      md.material = new THREE.MeshBasicMaterial({ map: md.tex, transparent: true, depthWrite: false, side: THREE.DoubleSide });
       md.ok = true;
     } catch (e) { md.ok = false; md.error = e; }
   }
@@ -1549,8 +1694,8 @@ function pickPreset(exclude) {
 let mdNoticeShown = false;
 function syncMilkdropPlanes() {
   for (const md of milkdrops) {
-    const want = md.ok ? md.material : md.fallback;
-    if (planes[md.key].mesh.material !== want) planes[md.key].mesh.material = want;
+    if (md.ok) setScreen(md.key, md.tex, MD_W / MD_H);
+    else setScreen(md.key, md.fallback.tex, 16 / 9);
   }
   if (!mdNoticeShown && milkdrops.some((md) => !md.ok)) {
     mdNoticeShown = true;
@@ -1614,8 +1759,9 @@ function nextScene() {
 }
 
 const inputs = Object.create(null);
-const CAM_DEFAULTS = { cx: 0, cy: 0, cz: 6, tx: 0, ty: 0, tz: 0, fov: 55, roll: 0, zoom: 1, rot: 0, decay: 0 };
-const PLANE_DEFAULTS = { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0, sx: 1, sy: 1, a: 1, add: 0, bright: 1 };
+const CAM_DEFAULTS = { cx: 0, cy: 0, cz: 6, tx: 0, ty: 0, tz: 0, fov: 55, roll: 0, zoom: 1, rot: 0, decay: 0, bg: 1, bgzoom: 1, bgrot: 0, bgx: 0, bgy: 0 };
+const bgLook = { level: 1, zoom: 1, rot: 0, x: 0, y: 0 };
+const PLANE_DEFAULTS = { x: 0, y: 0, z: 0, rx: 0, ry: 0, rz: 0, sx: 1, sy: 1, sz: 0, a: 1, add: 0, bright: 1, depth: 0, round: 0, relief: 0 };
 const extra = Object.create(null);
 
 function runBlock(key, defaults) {
@@ -1643,13 +1789,20 @@ function fillInputs(t, dt, fps, frameCount) {
   inputs.lanes = engine.lanes.filter((l) => l.cur).length;
   inputs.aspect = aspect; inputs.pi = Math.PI; inputs.tau = Math.PI * 2; inputs.n = PLANE_KEYS.length;
 }
-function applyLook(mesh, a, bright, additive) {
-  const m = mesh.material;
+function applyLook(plane, v) {
+  const m = plane.mat, u = m.uniforms;
+  const a = clamp(num(v.a, 1), 0, 1), additive = num(v.add, 0) > 0.5;
   const blending = additive ? THREE.AdditiveBlending : THREE.NormalBlending;
   if (m.blending !== blending) m.blending = blending;
-  if (m.isShaderMaterial) { m.uniforms.uAlpha.value = a; m.uniforms.uBright.value = bright; }
-  else { m.opacity = a; m.color.setScalar(bright); }
-  mesh.visible = a > 0.002;
+  const writeDepth = a > 0.99 && !additive && plane.key !== 'nest';   // solid and opaque: hide what is behind it
+  if (m.depthWrite !== writeDepth) m.depthWrite = writeDepth;
+  u.uAlpha.value = a;
+  u.uBright.value = clamp(num(v.bright, 1), 0, 4);
+  u.uDepth.value = clamp(num(v.depth, 0), 0, 8);
+  u.uRound.value = clamp(num(v.round, 0), 0, 1);
+  u.uRelief.value = clamp(num(v.relief, 0), -2, 2);
+  u.uSize.value.set(0.9 * plane.srcAspect, 0.9);
+  plane.mesh.visible = a > 0.002;
 }
 function evaluate() {
   for (const k in extra) delete extra[k];
@@ -1669,6 +1822,11 @@ function evaluate() {
   trailMat.uniforms.uZoom.value = clamp(num(cv.zoom, 1), 0.5, 2);
   trailMat.uniforms.uRot.value = clamp(num(cv.rot, 0), -1, 1);
   trailMat.uniforms.uDecay.value = decay;
+  bgLook.level = clamp(num(cv.bg, 1), 0, 2);
+  bgLook.zoom = clamp(num(cv.bgzoom, 1), 0.1, 10);
+  bgLook.rot = num(cv.bgrot, 0);
+  bgLook.x = num(cv.bgx, 0);
+  bgLook.y = num(cv.bgy, 0);
   trail.visible = decay > 0;
 
   delete extra.fit;
@@ -1679,19 +1837,19 @@ function evaluate() {
     const mesh = planes[key].mesh;
     mesh.position.set(num(v.x, 0), num(v.y, 0), num(v.z, 0));
     mesh.rotation.set(num(v.rx, 0), num(v.ry, 0), num(v.rz, 0));
-    mesh.scale.set(num(v.sx, 1) || 1e-4, num(v.sy, 1) || 1e-4, 1);
-    applyLook(mesh, clamp(num(v.a, 1), 0, 1), clamp(num(v.bright, 1), 0, 4), num(v.add, 0) > 0.5);
+    const sx = num(v.sx, 1) || 1e-4, sy = num(v.sy, 1) || 1e-4, sz = num(v.sz, 0);
+    mesh.scale.set(sx, sy, sz > 0 ? sz : Math.sqrt(Math.abs(sx * sy)));
+    applyLook(planes[key], v);
   });
 }
 
 /* ------------------------------------------------------------------ video on the Stream plane */
-const video = { el: null, tex: null, mat: null, stream: null, url: null, active: false, want: false, timer: 0 };
+const video = { el: null, tex: null, stream: null, url: null, active: false, want: false, timer: 0 };
 function showVideo(el) {
   video.tex = new THREE.VideoTexture(el);
   video.tex.minFilter = THREE.LinearFilter;
   video.tex.generateMipmaps = false;
-  video.mat = new THREE.MeshBasicMaterial({ map: video.tex, transparent: true, depthWrite: false, side: THREE.DoubleSide });
-  planes.stream.mesh.material = video.mat;
+  setScreen('stream', video.tex, el.videoWidth && el.videoHeight ? el.videoWidth / el.videoHeight : 16 / 9);
   video.active = true;
   $('btnVideo').textContent = 'Back to fractal';
 }
@@ -1700,9 +1858,8 @@ function releaseVideo() {
   if (video.url) URL.revokeObjectURL(video.url);
   if (video.stream) video.stream.getTracks().forEach((t) => t.stop());
   if (video.tex) video.tex.dispose();
-  if (video.mat) video.mat.dispose();
-  Object.assign(video, { el: null, tex: null, mat: null, stream: null, url: null, active: false });
-  planes.stream.mesh.material = procStream;
+  Object.assign(video, { el: null, tex: null, stream: null, url: null, active: false });
+  setScreen('stream', procStream.tex, 16 / 9);
   $('btnVideo').textContent = 'Video file';
   setLiveButton('videoStart', false, 'Start');
 }
@@ -1717,6 +1874,253 @@ function newVideoElement() {
   el.muted = true; el.loop = true; el.playsInline = true;
   el.setAttribute('playsinline', '');
   return el;
+}
+
+/* ------------------------------------------------------------------ video background
+   Fills whatever the 3D scene leaves dark. Archive video plays William Victor Newbold's videos from
+   archive.org, muted, a 1–2½ minute stretch of each, crossfading nonstop; My videos does the same with
+   local files; the shader (a slow nebula) fills in while a video loads and whenever none can play. */
+const BG_QUERY = 'creator:("william victor newbold" OR "william v. newbold") AND mediatype:movies';
+const BG_FADE = 3;
+const bg = {
+  mode: 'off', gen: 0, a: null, b: null, fading: false, mix: 0, vis: 0, skip: false, preparing: false, idleUntil: 0,
+  level: clamp(num(prefs.bgLevel, 0.8), 0, 1), files: [], bag: [], ids: null, fetching: null,
+  recent: loadList('nd.bgrecent.v1'), bad: new Set(), note: '', maxClip: 0,
+};
+async function bgCatalog() {
+  if (bg.ids) return bg.ids;
+  if (bg.fetching) return bg.fetching;
+  bg.fetching = (async () => {
+    let cached = null;
+    try { cached = JSON.parse(localStorage.getItem('nd.vcatalog.v1') || 'null'); } catch (e) { cached = null; }
+    const usable = cached && cached.q === BG_QUERY && Array.isArray(cached.ids) && cached.ids.length;
+    if (usable && Date.now() - cached.at < 12 * 3600e3) return (bg.ids = cached.ids);
+    try {
+      const data = await fetchJSON('https://archive.org/advancedsearch.php?q=' + encodeURIComponent(BG_QUERY) + '&fl[]=identifier&rows=2000&output=json');
+      const ids = ((data.response && data.response.docs) || []).map((d) => d.identifier).filter(Boolean);
+      if (!ids.length) throw new Error('archive.org found no videos');
+      try { localStorage.setItem('nd.vcatalog.v1', JSON.stringify({ q: BG_QUERY, at: Date.now(), ids })); } catch (e) { /* storage off */ }
+      return (bg.ids = ids);
+    } catch (e) {
+      if (usable) return (bg.ids = cached.ids);
+      throw e;
+    }
+  })();
+  try { return await bg.fetching; } finally { bg.fetching = null; }
+}
+const BG_FORMAT_RANK = { 'h.264': 0, 'h.264 IA': 1, '512Kb MPEG4': 2, 'MPEG4': 3 };
+async function pickBgArchive() {
+  const ids = await bgCatalog();
+  const recent = new Set(bg.recent.slice(-Math.min(30, Math.floor(ids.length / 2))));
+  const busy = new Set([bg.a, bg.b].filter(Boolean).map((c) => c.info.item));
+  const maxRate = coarse ? 3e6 : 14e6;          // bits per second a background video may use
+  for (let attempt = 0; attempt < 10; attempt++) {
+    let pool = ids.filter((id) => !bg.bad.has(id) && !recent.has(id) && !busy.has(id));
+    if (!pool.length) pool = ids.filter((id) => !bg.bad.has(id) && !busy.has(id));
+    if (!pool.length) return null;
+    const id = pickOne(pool);
+    let meta;
+    try { meta = await iaMeta(id); } catch (e) { if (attempt >= 2) throw e; continue; }
+    const files = (meta.files || []).filter((f) => {
+      if (!/\.mp4$/i.test(f.name) || /\.temp\.mp4$/i.test(f.name)) return false;
+      const len = parseLength(f.length), size = parseFloat(f.size) || 0;
+      if (len > 0 && len < 6) return false;
+      return !(len > 0 && size > 0 && (size * 8) / len > maxRate);
+    });
+    if (!files.length) { bg.bad.add(id); continue; }
+    const rank = (f) => (f.format in BG_FORMAT_RANK ? BG_FORMAT_RANK[f.format] : 4);
+    const best = Math.min(...files.map(rank));
+    const f = pickOne(files.filter((x) => rank(x) === best));
+    const m = meta.metadata || {};
+    const album = Array.isArray(m.title) ? m.title[0] : m.title;
+    bg.recent.push(id);
+    if (bg.recent.length > 200) bg.recent.splice(0, bg.recent.length - 200);
+    saveList('nd.bgrecent.v1', bg.recent);
+    const path = '/' + f.name.split('/').map(encodeURIComponent).join('/');
+    const servers = [...new Set([...(meta.workable_servers || []), meta.d1, meta.d2, meta.server].filter(Boolean))];
+    return {
+      item: id, key: id + '/' + f.name, cors: true,
+      url: 'https://archive.org/download/' + encodeURIComponent(id) + path,
+      alts: meta.dir ? servers.map((s) => `https://${s}${meta.dir}${path}`) : [],
+      title: String(f.title || f.name.replace(/^.*\//, '').replace(/\.[^.]+$/, '')), album: String(album || id),
+      link: 'https://archive.org/details/' + encodeURIComponent(id), length: parseLength(f.length),
+    };
+  }
+  return null;
+}
+function pickBgFile() {
+  if (!bg.files.length) return null;
+  if (!bg.bag.length) bg.bag = shuffle(bg.files.map((_, k) => k));
+  const f = bg.files[bg.bag.shift()];
+  return f ? { ...f } : null;
+}
+function makeClip(info) {
+  const el = document.createElement('video');
+  el.muted = true; el.loop = true; el.playsInline = true; el.preload = 'auto';
+  el.setAttribute('playsinline', '');
+  if (info.cors) el.crossOrigin = 'anonymous';
+  const clip = { info, el, tex: null, ready: false, failed: false, begun: false, made: performance.now(),
+    seg: rand(60, 150), played: 0, lastT: -1, lastTick: 0, lastMove: performance.now(), fit: new THREE.Vector2(1, 1) };
+  el.addEventListener('loadedmetadata', () => {
+    const dur = Number.isFinite(el.duration) && el.duration > 0 ? el.duration : info.length;
+    if (dur > 240) { const start = rand(0, dur - 170); try { el.currentTime = start; } catch (e) { /* start from the top */ } }
+    if (bg.maxClip > 0) clip.seg = Math.min(clip.seg, bg.maxClip);
+  }, { once: true });
+  const markReady = () => { if (!clip.ready && !el.seeking && el.readyState >= 3) clip.ready = true; };
+  el.addEventListener('canplay', markReady);
+  el.addEventListener('seeked', markReady);
+  el.addEventListener('error', () => {
+    if (!clip.begun && info.alts && info.alts.length) { el.src = info.alts.shift(); el.load(); return; }
+    clip.failed = true;
+  });
+  el.src = info.url;
+  el.load();
+  return clip;
+}
+function disposeClip(c) {
+  if (!c || c.disposed) return;
+  c.disposed = true;
+  try { c.el.pause(); c.el.removeAttribute('src'); c.el.load(); } catch (e) { /* gone */ }
+  if (c.tex) c.tex.dispose();
+}
+const clipStartable = (c) => !!c && !c.failed && (c.ready || performance.now() - c.made > 12000);
+function bgPrepare() {
+  if (bg.b || bg.preparing || performance.now() < bg.idleUntil) return;
+  if (bg.mode !== 'archive' && bg.mode !== 'files') return;
+  if (bg.mode === 'archive' && !CAN_MP4) return;
+  bg.preparing = true;
+  const gen = bg.gen;
+  (async () => {
+    try {
+      const info = bg.mode === 'archive' ? await pickBgArchive() : pickBgFile();
+      if (gen !== bg.gen) return;
+      if (!info) { bg.idleUntil = performance.now() + 5000; return; }
+      bg.b = makeClip(info);
+      if (bg.note) setBgNote('');
+    } catch (e) {
+      bg.idleUntil = performance.now() + 20000;
+      setBgNote(`${e.message || 'archive.org didn’t answer'}. The shader fills in until it does.`);
+    } finally { bg.preparing = false; }
+  })();
+}
+function bgBegin() {
+  const c = bg.b;
+  c.begun = true;
+  bg.fails = 0;
+  c.lastTick = c.lastMove = performance.now();
+  c.el.play().catch(() => { /* muted video may play; if not, the watchdog moves on */ });
+  c.tex = new THREE.VideoTexture(c.el);
+  c.tex.minFilter = THREE.LinearFilter;
+  c.tex.generateMipmaps = false;
+  bg.recentTitle = c.info.title;
+  if (!bg.a) { bg.a = c; bg.b = null; bg.fading = false; bg.mix = 0; }
+  else { bg.fading = true; bg.mix = 0; }
+  refreshBgUI();
+}
+function bgTick() {
+  if (bg.mode !== 'archive' && bg.mode !== 'files') return;
+  const now = performance.now();
+  if (bg.b && bg.b.failed && !bg.fading) {
+    disposeClip(bg.b);
+    bg.b = null;
+    // several failures in a row: rest a minute before trying again, showing the shader meanwhile
+    if (++bg.fails >= 6) { bg.fails = 0; bg.idleUntil = now + 60000; }
+  }
+  const a = bg.a;
+  if (!a) { if (clipStartable(bg.b)) bgBegin(); else bgPrepare(); return; }
+  if (a.failed && !bg.fading) { disposeClip(a); bg.a = null; refreshBgUI(); return; }
+  const t = a.el.currentTime;
+  if (t !== a.lastT) { a.played += Math.min(1, (now - a.lastTick) / 1000); a.lastT = t; a.lastMove = now; }
+  else if (!a.el.paused && now - a.lastMove > 15000) a.failed = true;
+  a.lastTick = now;
+  if (a.el.paused && !a.failed) a.el.play().catch(() => {});
+  const left = a.seg - a.played;
+  if (left < 25 || bg.skip || a.failed) bgPrepare();
+  if (!bg.fading && clipStartable(bg.b) && (left <= 0 || bg.skip || a.failed)) { bg.skip = false; bgBegin(); }
+}
+const CAN_MP4 = !!document.createElement('video').canPlayType('video/mp4; codecs="avc1.42E01E"');
+function setBgMode(mode, user) {
+  if (!STANDALONE && mode === 'archive') mode = 'shader';
+  bg.gen++;
+  disposeClip(bg.a); disposeClip(bg.b);
+  bg.a = bg.b = null; bg.fading = false; bg.mix = 0; bg.skip = false; bg.preparing = false; bg.idleUntil = 0;
+  bg.mode = mode;
+  prefs.bg = mode;
+  savePrefs();
+  setBgNote(mode === 'archive' && !CAN_MP4 ? 'This browser can’t play the archive’s MP4 videos, so the shader fills in. Chrome, Edge and Safari play them.' : '');
+  bg.fails = 0;
+  if (user && mode === 'files' && !bg.files.length) $('fileBg').click();
+  bgTick();
+}
+function setBgNote(msg) { bg.note = msg; refreshBgUI(); }
+function addBgFiles(list) {
+  const fresh = [...list].filter((f) => (f.type && f.type.startsWith('video/')) || /\.(mp4|m4v|mov|webm)$/i.test(f.name));
+  if (!fresh.length) { toast('None of those are videos this page can play. MP4 (H.264) works everywhere.'); return; }
+  for (const f of fresh) {
+    const key = `${f.name}/${f.size}/${f.lastModified}`;
+    if (bg.files.some((x) => x.key === key)) continue;
+    bg.files.push({ key, url: URL.createObjectURL(f), title: f.name.replace(/\.[^.]+$/, ''), album: '', link: '', length: 0, cors: false, item: key });
+  }
+  bg.bag = [];
+  if (bg.mode !== 'files') setBgMode('files', false);
+  else { bg.idleUntil = 0; bgTick(); refreshBgUI(); }
+  toast(`${bg.files.length} background video${bg.files.length === 1 ? '' : 's'}.`, 2200);
+}
+function bgFrame(dt) {
+  // crossfade between clips, and fade video in over the shader once a clip is showing
+  if (bg.fading) {
+    bg.mix += dt / BG_FADE;
+    if (bg.mix >= 1) { disposeClip(bg.a); bg.a = bg.b; bg.b = null; bg.mix = 0; bg.fading = false; refreshBgUI(); }
+  }
+  const a = bg.a, b = bg.fading ? bg.b : null;
+  const showing = !!(a && a.tex && a.el.readyState >= 2);
+  bg.vis += ((showing ? 1 : 0) - bg.vis) * Math.min(1, dt * 1.5);
+  const u = blitMat.uniforms;
+  const fit = (c, out) => {
+    const va = c && c.el.videoWidth && c.el.videoHeight ? c.el.videoWidth / c.el.videoHeight : 16 / 9;
+    return va > aspect ? out.set(aspect / va, 1) : out.set(1, va / aspect);   // cover the screen
+  };
+  u.tBgA.value = a && a.tex ? a.tex : BLACK_TEX;
+  u.tBgB.value = b && b.tex ? b.tex : u.tBgA.value;
+  fit(a, u.uFitA.value);
+  fit(b || a, u.uFitB.value);
+  u.uMix.value = b ? bg.mix : 0;
+  u.uVid.value = bg.mode === 'archive' || bg.mode === 'files' ? bg.vis : 0;
+  u.uShader.value = bg.mode === 'off' ? 0 : 1;
+  u.uLevel.value = bg.mode === 'off' ? 0 : bg.level * bgLook.level;
+  u.uZoom.value = bgLook.zoom;
+  u.uRot.value = bgLook.rot;
+  u.uPan.value.set(0.5 + bgLook.x, 0.5 + bgLook.y);
+  u.uAspect.value = aspect;
+  u.uTime.value = simTime;
+  u.uBass.value = audio.bands.bass;
+}
+const BG_HINTS = {
+  archive: 'William Victor Newbold’s videos from archive.org fill the dark space behind the solids, muted, a 1–2½ minute stretch of each, crossfading nonstop. The shader fills in while a video loads.',
+  files: 'Your videos fill the dark space, muted, shuffled and crossfading. Files stay listed until you reload the page.',
+  shader: 'A slow generated nebula fills the dark space and swells with the bass.',
+  off: 'Black behind the solids.',
+};
+function refreshBgUI() {
+  for (const btn of document.querySelectorAll('#bgSeg [data-bg]')) btn.setAttribute('aria-checked', String(btn.dataset.bg === bg.mode));
+  $('bgHint').textContent = BG_HINTS[bg.mode] || '';
+  const st = $('bgStatus');
+  st.textContent = bg.note || (bg.mode === 'files' && !bg.files.length ? 'No videos yet. Add some to start.' : '');
+  st.className = 'status' + (bg.note ? ' err' : '');
+  $('bgNext').hidden = !(bg.mode === 'archive' || bg.mode === 'files');
+  $('bgAdd').hidden = bg.mode !== 'files';
+  renderBgNow();
+}
+function renderBgNow() {
+  const c = bg.fading && bg.b ? bg.b : bg.a, row = $('bgNow');
+  row.hidden = !c || !(bg.mode === 'archive' || bg.mode === 'files');
+  if (row.hidden) return;
+  const a = row.querySelector('a'), tm = row.querySelector('.tm');
+  const label = c.info.album && c.info.album !== c.info.title ? `${c.info.title} · ${c.info.album}` : c.info.title;
+  if (a.textContent !== label) a.textContent = label;
+  if (c.info.link) { if (a.getAttribute('href') !== c.info.link) a.href = c.info.link; } else a.removeAttribute('href');
+  const time = `${fmtTime(c.played)} / ${fmtTime(c.seg)}`;
+  if (tm.textContent !== time) tm.textContent = time;
 }
 
 /* ------------------------------------------------------------------ devices (GitHub Pages build) */
@@ -2069,6 +2473,24 @@ $('fileVideo').addEventListener('change', async (e) => {
   catch (err) { releaseVideo(); toast(`That video wouldn’t play (${err.message}). An MP4 with H.264 works everywhere.`); }
 });
 $('videoStart').addEventListener('click', () => startCamera(true));
+for (const btn of document.querySelectorAll('#bgSeg [data-bg]')) {
+  btn.addEventListener('click', () => { if (btn.dataset.bg !== bg.mode || btn.dataset.bg === 'files') setBgMode(btn.dataset.bg, true); });
+}
+$('bgLevel').value = String(bg.level);
+$('bgLevelOut').textContent = `${Math.round(bg.level * 100)}%`;
+$('bgLevel').addEventListener('input', () => {
+  bg.level = clamp(parseFloat($('bgLevel').value) || 0, 0, 1);
+  $('bgLevelOut').textContent = `${Math.round(bg.level * 100)}%`;
+  prefs.bgLevel = bg.level;
+  savePrefs();
+});
+$('bgNext').addEventListener('click', () => { bg.skip = true; bg.idleUntil = 0; bgTick(); });
+$('bgAdd').addEventListener('click', () => $('fileBg').click());
+$('fileBg').addEventListener('change', (e) => {
+  const files = e.target.files ? [...e.target.files] : [];
+  e.target.value = '';
+  if (files.length) addBgFiles(files);
+});
 $('midiStart').addEventListener('click', () => startMidi(true));
 $('btnEq').addEventListener('click', () => toggleSheet('eqSheet'));
 $('btnHide').addEventListener('click', () => setBare(true));
@@ -2121,6 +2543,7 @@ window.addEventListener('keydown', (e) => {
   else if (k === 'n') newPresets(1.5);
   else if (k === 's') nextScene();
   else if (k === 'k') skipTrack();
+  else if (k === 'b') { bg.skip = true; bg.idleUntil = 0; bgTick(); }
   else if (k === 'e') { if (bare) setBare(false); toggleSheet('eqSheet'); }
   else if (k === 'f') toggleFullscreen();
 });
@@ -2142,7 +2565,7 @@ function hud(dt) {
   $('fpsLabel').textContent = `${Math.round(fps)} fps`;
   $('audioLabel').textContent = audioLabelText();
   renderNowLine();
-  if (!$('srcSheet').hidden) renderNowPlaying();
+  if (!$('srcSheet').hidden) { renderNowPlaying(); renderBgNow(); }
   if (midi.last) $('midiLabel').textContent = midi.last;
 }
 function frame(now) {
@@ -2164,9 +2587,17 @@ function frame(now) {
     try { md.viz.render(); md.tex.needsUpdate = true; }
     catch (e) { md.ok = false; md.error = e; syncMilkdropPlanes(); }
   }
-  for (const m of procMats) { m.uniforms.uTime.value = simTime; m.uniforms.uBass.value = audio.bands.bass; }
+  setScreen('nest', rtRead.texture, aspect);
+  for (const p of procs) {
+    p.mat.uniforms.uTime.value = simTime;
+    p.mat.uniforms.uBass.value = audio.bands.bass;
+    if (!PLANE_KEYS.some((k) => planes[k].mesh.visible && planes[k].mat.uniforms.map.value === p.tex)) continue;
+    procQuad.material = p.mat;
+    renderer.setRenderTarget(p.rt);
+    renderer.render(procScene, blitCam);
+  }
   trailMat.uniforms.tPrev.value = rtRead.texture;
-  nestMat.uniforms.tMap.value = rtRead.texture;
+  bgFrame(dt);
 
   renderer.setRenderTarget(rtWrite);
   renderer.render(scene, camera);
@@ -2183,9 +2614,11 @@ function frame(now) {
 setInterval(() => {
   for (const l of engine.lanes) l.tick();
   ctxWatch();
+  bgTick();
 }, 250);
 
 async function bootSources() {
+  setBgMode(prefs.bg || (STANDALONE ? 'archive' : 'shader'), false);
   const m = prefs.mode;
   if (!STANDALONE) { setMode('off', false); return; }
   if (m === 'off' || m === 'files') setMode(m, false);
@@ -2200,7 +2633,7 @@ refreshAudioUI();
 bootSources();
 
 window.nestedDimensions = {
-  EQ, state, planes, milkdrops, engine, audio, setMode, skipTrack, setPaused,
+  EQ, state, planes, milkdrops, engine, audio, setMode, skipTrack, setPaused, bg, setBgMode, blitUniforms: blitMat.uniforms,
   get fps() { return fps; }, get frames() { return frames; },
 };
 window.__ndReady = true;

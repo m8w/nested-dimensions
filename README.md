@@ -9,7 +9,10 @@ By xik6 (William Victor Newbold).
 ## What it does
 
 - **Four screens in one 3D scene.** Two MilkDrop planes run real presets through Butterchurn. The Stream plane takes video (your fractal stream, a camera or a file) and shows a Julia-set fractal until one is connected. The Nested plane shows the previous frame, so the whole scene repeats inside itself, frame within frame.
+- **Solids (v0.3).** Each screen can become a box, a cube or a sphere with its picture on every face. The solid's proportions come from the picture's, and the picture's brightness raises its surface.
+- **Video background (v0.3).** The dark space behind the solids fills with William Victor Newbold's videos from archive.org, crossfading nonstop. It can also play your own videos or a generated nebula.
 - **Nonstop audio (v0.2).** Archive radio plays the xik6 catalog from archive.org at random, crossfaded, on up to four lanes at once. It also plays your own files, shuffled, or follows a live input that reconnects by itself.
+- **Mac launcher (v0.3).** Double-click to open it in its own window, with sound that starts by itself and a window that reopens if it closes.
 - **Equations.** The camera and each plane run a small MilkDrop-flavoured program every frame that sets position, rotation, scale, opacity and glow from time, audio, tracks and MIDI. Edit them live in the page.
 - **Trails.** MilkDrop-style feedback behind everything: each frame zooms, turns and fades the last one.
 - **Four scenes:** orbit, stack, tunnel, lissajous.
@@ -34,6 +37,44 @@ How it keeps going:
 
 Each new track also brings a new MilkDrop preset on one plane. The equations can follow the music through `track`, `trackpos`, `newtrack` and `lanes`.
 
+## Solids
+
+Every screen is one mesh that morphs between three forms, with the picture wrapped on every face:
+
+- `depth` 0 is a flat screen. Raise it and the screen deepens into a box; around 0.9 a 16:9 screen becomes roughly a cube.
+- `round` 0 is a box and 1 is a sphere. Values in between give rounded boxes.
+- `relief` raises the surface by the picture's own brightness: 0.1 is gentle, 0.5 is strong, and negative values carve in. A MilkDrop preset or a video becomes a moving landscape on the solid.
+
+The width and height come from the source's proportions, so a 4:3 video makes a 4:3 solid. The solids are shaded by how they face the camera, so they read as volumes. The scenes use them: in **orbit** three solids breathe between screen, cube and sphere around the nested screen, in **tunnel** they tumble towards you, and in **lissajous** their surfaces rise with the mids. **stack** keeps flat layers.
+
+## Video background
+
+Open **Sources → Background**:
+
+- **Archive video** (the default) plays William Victor Newbold's videos from archive.org (about 60 items) behind the solids. Each is muted, plays a 1–2½ minute stretch from a random point, and crossfades into the next. Lighter files are chosen on phones. If a video won't load, the page tries the item's other servers and then moves on.
+- **My videos** does the same with your own video files.
+- **Shader** is a slow generated nebula that swells with the bass. It also fills in while a video loads, or if archive.org can't be reached.
+- **Off** leaves it black.
+
+The background fills only what the 3D scene doesn't cover, so the solids stay solid. A little shows through their darkest parts, and it shows inside the nested frame. The Camera block can move it with `bg` (brightness, 1 = the level slider), `bgzoom`, `bgrot`, `bgx` and `bgy`; the scenes drift it against the camera for depth. Press **B** for the next clip.
+
+## Mac launcher
+
+To put the launcher on your Desktop, paste this into Terminal once:
+
+```
+curl -fsSL https://m8w.github.io/nested-dimensions/launch/install-mac.sh | bash
+```
+
+Then double-click **Nested Dimensions** on the Desktop. It opens the page in its own Chrome window (Edge, Brave or Chromium also work) where:
+
+- sound starts by itself, with no Start audio tap;
+- the page keeps full speed even when another window covers it;
+- the Mac stays awake while it runs;
+- the window opens again if the browser closes or crashes.
+
+It uses its own browser profile, so your everyday Chrome is untouched. Allow the microphone, camera or MIDI in that window once, and it remembers. Press Control-C in its Terminal window to stop it. The launcher itself is [`launch/Nested Dimensions.command`](launch/Nested%20Dimensions.command); it opens a 1920 × 1080 window by default, which you can change with `ND_WIDTH` and `ND_HEIGHT`, or set `ND_FULL=1` for fullscreen.
+
 ## Running it
 
 - **GitHub Pages:** Settings → Pages → Build and deployment → Deploy from a branch → `main`, `/ (root)` → Save. The site appears at the address above a minute later.
@@ -49,7 +90,7 @@ Each new track also brings a new MilkDrop preset on one plane. The equations can
 
 The page remembers the audio source, camera and MIDI, so after a reload (or an 11:45 cycle restart) it reconnects everything the browser has already allowed.
 
-Keys: **H** controls · **F** fullscreen · **S** next scene · **N** new MilkDrop presets · **K** skip track · **E** equations · **Ctrl/⌘ + Enter** apply an edit.
+Keys: **H** controls · **F** fullscreen · **S** next scene · **N** new MilkDrop presets · **K** skip track · **B** next background clip · **E** equations · **Ctrl/⌘ + Enter** apply an edit.
 
 ## The equation language
 
@@ -85,7 +126,9 @@ sx = 1.9 + bass*0.2; sy = sx;
 |---|---|
 | `x`, `y`, `z` | position |
 | `rx`, `ry`, `rz` | rotation in radians |
-| `sx`, `sy` | scale (a plane is 1.6 × 0.9 at scale 1) |
+| `sx`, `sy`, `sz` | scale (a 16:9 screen is 1.6 × 0.9 at scale 1); `sz` follows `sx` and `sy` unless set |
+| `depth`, `round` | solid form: `depth` 0 flat, ~0.9 a cube; `round` 0 box, 1 sphere |
+| `relief` | the picture's brightness pushes the surface out (negative carves in) |
 | `a` | opacity, 0–1 |
 | `add` | 1 for additive glow, 0 for normal blending |
 | `bright` | colour gain |
@@ -97,6 +140,7 @@ sx = 1.9 + bass*0.2; sy = sx;
 | `fov`, `roll` | field of view in degrees, roll in radians |
 | `fit` | distance multiplier; it starts larger on tall screens so phones see the whole scene |
 | `zoom`, `rot`, `decay` | trails: zoom and rotation per frame, and how much of the last frame stays (0 turns trails off) |
+| `bg`, `bgzoom`, `bgrot`, `bgx`, `bgy` | background: brightness (1 = the level slider, 0 hides it), zoom, rotation in radians, pan |
 
 Functions: `sin cos tan asin acos atan atan2 abs sqrt sqr pow exp log log10 floor ceil int min max sign clamp mix fract tri noise rand frand above below equal band bor bnot if`.
 
