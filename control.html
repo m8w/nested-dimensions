@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nested Dimensions Control</title>
+<meta name="description" content="Control panel for Nested Dimensions: edit every running visuals window from one place.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fragment+Mono&family=Instrument+Sans:wght@400;500;600&family=Major+Mono+Display&display=swap">
+<style>
+/* Layout: one column of window cards, each a compact rack of controls; the equations editor docks below. */
+:root {
+  --ground: #0b0910;
+  --panel: #14111c;
+  --panel-2: #1b1725;
+  --line: rgba(226, 212, 255, 0.13);
+  --line-strong: rgba(226, 212, 255, 0.3);
+  --ink: #efe9f7;
+  --dim: #a89fba;
+  --flame: #ffb347;
+  --flame-soft: rgba(255, 179, 71, 0.14);
+  --on-flame: #1f1405;
+  --warn: #ff9483;
+  --ok: #9fe0a8;
+  --well: rgba(0, 0, 0, 0.35);
+  --font-display: "Major Mono Display", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-ui: "Instrument Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-code: "Fragment Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: border-box; }
+html { background: var(--ground); }
+body {
+  margin: 0; background: var(--ground); color: var(--ink); font: 14px/1.45 var(--font-ui);
+  padding-block: calc(env(safe-area-inset-top, 0px) + 14px) calc(env(safe-area-inset-bottom, 0px) + 24px);
+  padding-left: max(14px, env(safe-area-inset-left, 0px)); padding-right: max(14px, env(safe-area-inset-right, 0px));
+}
+[hidden] { display: none !important; }
+main { max-width: 760px; margin: 0 auto; display: grid; gap: 14px; }
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; justify-content: space-between; }
+.wordmark { font-family: var(--font-display); font-size: 15px; letter-spacing: 0.03em; }
+.wordmark small { font-family: var(--font-code); font-size: 11px; color: var(--dim); margin-left: 8px; }
+.hint { margin: 0; color: var(--dim); font-size: 12.5px; max-width: 68ch; }
+.hint kbd { font: 11.5px var(--font-code); color: var(--ink); border: 1px solid var(--line-strong); border-radius: 4px; padding: 0 4px; }
+.banner { background: var(--flame-soft); border: 1px solid var(--flame); border-radius: 10px; padding: 10px 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.banner p { margin: 0; flex: 1 1 220px; }
+button, .file {
+  appearance: none; font: 500 12.5px/1 var(--font-ui); color: var(--ink); background: transparent; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; min-height: 32px; white-space: nowrap;
+  display: inline-flex; align-items: center;
+}
+button:hover, .file:hover { border-color: var(--line-strong); background: rgba(255, 255, 255, 0.04); }
+button.primary { background: var(--flame); border-color: var(--flame); color: var(--on-flame); }
+button.primary:hover { background: #ffc370; }
+button[aria-pressed="true"], .seg button[aria-checked="true"] { background: var(--flame); border-color: var(--flame); color: var(--on-flame); }
+button:focus-visible, select:focus-visible, textarea:focus-visible, input:focus-visible, .file:focus-within { outline: 2px solid var(--flame); outline-offset: 2px; }
+.file input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.empty { border: 1px dashed var(--line-strong); border-radius: 12px; padding: 22px; color: var(--dim); text-align: center; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.card.selected { border-color: var(--flame); }
+.card.stale { opacity: 0.55; }
+.card-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; background: var(--panel-2); border-bottom: 1px solid var(--line); }
+.card-head h2 { margin: 0; font: 600 14px var(--font-ui); }
+.meta { font: 11.5px var(--font-code); color: var(--dim); font-variant-numeric: tabular-nums; flex: 1 1 140px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip { font: 10.5px var(--font-code); border: 1px solid var(--line-strong); border-radius: 99px; padding: 2px 7px; color: var(--dim); }
+.chip.warn { border-color: var(--warn); color: var(--warn); }
+.actions { display: flex; flex-wrap: wrap; gap: 5px; }
+.rows { display: grid; }
+.row { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 10px; align-items: start; padding: 9px 12px; border-top: 1px solid var(--line); }
+.row:first-child { border-top: 0; }
+.row > span:first-child { font: 600 10.5px/32px var(--font-ui); letter-spacing: 0.09em; text-transform: uppercase; color: var(--dim); }
+.stack { display: grid; gap: 7px; min-width: 0; }
+.line { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; min-width: 0; }
+.seg { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+select {
+  font: 13px var(--font-ui); color: var(--ink); background: var(--well); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; min-height: 32px;
+}
+.now { font: 12px/1.4 var(--font-code); color: var(--dim); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.now a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
+.slider { display: grid; grid-template-columns: 68px minmax(0, 1fr) 3.6em; gap: 8px; align-items: center; font: 12px var(--font-code); color: var(--dim); }
+.slider input { accent-color: var(--flame); width: 100%; min-width: 0; }
+.slider output { color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
+.editor { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: grid; gap: 10px; }
+.editor h3 { margin: 0; font: 600 13px var(--font-ui); }
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+.tabs button[aria-selected="true"] { border-color: var(--line-strong); background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 -2px 0 var(--flame); }
+textarea {
+  width: 100%; min-height: 220px; resize: vertical; font: 13px/1.55 var(--font-code); color: var(--ink);
+  background: var(--well); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; white-space: pre; overflow: auto; tab-size: 2;
+}
+.status { font: 12px/1.45 var(--font-code); color: var(--dim); min-height: 1.45em; }
+.status.err { color: var(--warn); }
+.status.ok { color: var(--ok); }
+@media (max-width: 560px) {
+  .row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .row > span:first-child { line-height: 1.4; }
+}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="wordmark">nested dimensions<small>control</small></div>
+    <div class="actions">
+      <button class="primary" id="newWin" type="button">New visuals window</button>
+      <button id="openAll" type="button" hidden>Reopen windows</button>
+    </div>
+  </header>
+  <p class="hint">Every Nested Dimensions window on this computer shows up here, and changes take effect in it straight away, even when it’s fullscreen in its own Space. <b>Show</b> brings a window to the front. <b>Fill screen</b> makes it cover its display while staying on the normal desktop. For true fullscreen, press <kbd>⌃⌘F</kbd> inside that window; you can keep editing it from here.</p>
+  <div class="banner" id="blocked" hidden><p>The browser blocked opening a window. Press the button to open it.</p><button class="primary" id="blockedBtn" type="button">Open window</button></div>
+  <div id="list"></div>
+  <section class="editor" id="editor" hidden aria-label="Equations">
+    <h3 id="edTitle">Equations</h3>
+    <div class="tabs" id="edTabs" role="tablist"></div>
+    <textarea id="edCode" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Equation code"></textarea>
+    <div class="status" id="edStatus" role="status"></div>
+    <div class="actions">
+      <button class="primary" id="edApply" type="button">Apply</button>
+      <button id="edRevert" type="button">Revert to the scene’s original</button>
+      <button id="edReload" type="button">Reload from window</button>
+    </div>
+  </section>
+</main>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  window.name = 'nd-control';
+  const params = new URLSearchParams(location.search);
+  const LAUNCH = params.has('launch');
+  const chan = 'BroadcastChannel' in window ? new BroadcastChannel('nested-dimensions') : null;
+  const SAVED_KEY = 'nd.control.windows';
+  const BLOCKS = [['camera', 'Camera'], ['mdA', 'MilkDrop A'], ['stream', 'Stream'], ['mdB', 'MilkDrop B'], ['nest', 'Nested']];
+  const AUDIO = [['radio', 'Archive radio'], ['files', 'Files'], ['live', 'Live input'], ['off', 'Off']];
+  const BG = [['archive', 'Archive video'], ['files', 'Videos'], ['shader', 'Shader'], ['off', 'Off']];
+
+  const wins = new Map();       // sid -> { s, seen, el }
+  const opened = new Map();     // wid -> WindowProxy this panel opened
+  let selected = null, activeKey = 'camera', blocks = null, dirty = false, pendingOpen = [];
+
+  const load = () => { try { const v = JSON.parse(localStorage.getItem(SAVED_KEY) || '[]'); return Array.isArray(v) ? v.map(String) : []; } catch (e) { return []; } };
+  const save = (list) => { try { localStorage.setItem(SAVED_KEY, JSON.stringify([...new Set(list)])); } catch (e) { /* storage off */ } };
+  const send = (sid, cmd, arg) => { if (chan) chan.postMessage({ t: 'cmd', to: sid, cmd, arg }); };
+  const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
+
+  if (!chan) {
+    $('list').append(el('div', { className: 'empty', textContent: 'This browser has no BroadcastChannel, so it can’t talk to the visuals windows. Use a current Chrome, Edge, Safari or Firefox.' }));
+    return;
+  }
+
+  /* ---------------------------------------------------------------- windows */
+  function liveWids() { return [...wins.values()].filter((w) => !w.stale).map((w) => w.s.wid); }
+  function openWindow(wid, k) {
+    const n = Number(wid) || 1;
+    const left = Math.min(screen.availWidth - 400, 560 + 34 * ((n - 1) % 8)), top = 34 * ((n - 1) % 8);
+    const url = new URL('./', location.href);
+    url.searchParams.set('w', wid);
+    const w = window.open(url.href, 'nd-w-' + wid, `popup,width=1280,height=720,left=${left},top=${top}`);
+    if (!w) return false;
+    opened.set(String(wid), w);
+    save([...load(), String(wid)]);
+    return true;
+  }
+  function nextWid() {
+    const used = [...liveWids(), ...load()].map(Number).filter(Number.isFinite);
+    return String(used.length ? Math.max(...used) + 1 : 1);
+  }
+  function showBlocked(list) {
+    pendingOpen = list;
+    $('blocked').hidden = !list.length;
+    $('blockedBtn').textContent = list.length > 1 ? `Open windows ${list.join(', ')}` : `Open window ${list[0] || ''}`;
+  }
+  $('blockedBtn').addEventListener('click', () => {
+    const left = pendingOpen.filter((wid) => !openWindow(wid));
+    showBlocked(left);
+  });
+  $('newWin').addEventListener('click', () => { const wid = nextWid(); if (!openWindow(wid)) showBlocked([wid]); });
+  $('openAll').addEventListener('click', () => {
+    const missing = load().filter((wid) => !liveWids().includes(wid));
+    showBlocked(missing.filter((wid) => !openWindow(wid)));
+  });
+
+  /* ---------------------------------------------------------------- cards */
+  function seg(options, onPick) {
+    const box = el('div', { className: 'seg' });
+    box.setAttribute('role', 'radiogroup');
+    for (const [value, label] of options) {
+      const b = el('button', { type: 'button', textContent: label });
+      b.setAttribute('role', 'radio');
+      b.dataset.value = value;
+      b.addEventListener('click', () => onPick(value));
+      box.append(b);
+    }
+    return box;
+  }
+  function slider(label, min, max, step, fmt, onInput) {
+    const input = el('input', { type: 'range', min, max, step });
+    const out = el('output', {});
+    input.addEventListener('input', () => { out.textContent = fmt(+input.value); onInput(+input.value); });
+    const wrap = el('label', { className: 'slider' }, el('span', { textContent: label }), input, out);
+    return { wrap, input, out, fmt };
+  }
+  function fileButton(label, accept, onFiles) {
+    const input = el('input', { type: 'file', accept, multiple: true });
+    input.addEventListener('change', () => { const files = [...input.files]; input.value = ''; if (files.length) onFiles(files); });
+    return el('label', { className: 'file' }, label, input);
+  }
+  function buildCard(sid) {
+    const w = wins.get(sid);
+    const c = {};
+    const card = el('article', { className: 'card' });
+    c.title = el('h2', {});
+    c.meta = el('span', { className: 'meta' });
+    c.chips = el('span', { className: 'actions' });
+    const btn = (label, fn) => { const b = el('button', { type: 'button', textContent: label }); b.addEventListener('click', fn); return b; };
+    c.bare = btn('Hide HUD', () => send(sid, 'bare', !w.s.bare));
+    const head = el('div', { className: 'card-head' }, c.title, c.meta, c.chips,
+      el('div', { className: 'actions' },
+        btn('Show', () => { const ref = opened.get(w.s.wid); if (ref && !ref.closed) ref.focus(); else send(sid, 'focus'); }),
+        btn('Fill screen', () => send(sid, 'fill')),
+        c.bare,
+        btn('Edit equations', () => select(sid)),
+        btn('Reload', () => send(sid, 'reload')),
+        btn('Close', () => {
+          send(sid, 'close');
+          const ref = opened.get(w.s.wid);
+          if (ref && !ref.closed) ref.close();
+          save(load().filter((x) => x !== w.s.wid));
+        })));
+
+    c.scene = el('select', {});
+    c.scene.setAttribute('aria-label', 'Scene');
+    c.scene.addEventListener('change', () => send(sid, 'scene', c.scene.value));
+    c.presets = el('div', { className: 'now' });
+    c.speed = slider('speed', 0, 2, 0.05, (v) => v.toFixed(2), (v) => send(sid, 'speed', v));
+
+    c.audioSeg = seg(AUDIO, (m) => send(sid, m === 'live' ? 'live' : 'audioMode', m));
+    c.audioNow = el('div', { className: 'now' });
+    c.pause = btn('Pause', () => send(sid, 'pause'));
+    c.volume = slider('volume', 0, 1, 0.01, (v) => `${Math.round(v * 100)}%`, (v) => send(sid, 'volume', v));
+    c.lanes = slider('lanes', 1, 4, 1, (v) => String(v), (v) => send(sid, 'lanes', v));
+
+    c.bgSeg = seg(BG, (m) => send(sid, 'bgMode', m));
+    c.bgNow = el('div', { className: 'now' });
+    c.bgLevel = slider('level', 0, 1, 0.01, (v) => `${Math.round(v * 100)}%`, (v) => send(sid, 'bgLevel', v));
+
+    const rows = el('div', { className: 'rows' },
+      el('div', { className: 'row' }, el('span', { textContent: 'Scene' }), el('div', { className: 'stack' },
+        el('div', { className: 'line' }, c.scene, btn('Next scene', () => send(sid, 'nextScene')), btn('New MilkDrop', () => send(sid, 'presets'))),
+        c.presets, c.speed.wrap)),
+      el('div', { className: 'row' }, el('span', { textContent: 'Audio' }), el('div', { className: 'stack' },
+        c.audioSeg, c.audioNow,
+        el('div', { className: 'line' }, btn('Skip track', () => send(sid, 'skip')), c.pause, btn('Start audio', () => send(sid, 'start')),
+          fileButton('Add audio files', 'audio/*,.mp3,.wav,.flac,.ogg,.m4a,.aif,.aiff', (files) => send(sid, 'addFiles', files))),
+        c.volume.wrap, c.lanes.wrap)),
+      el('div', { className: 'row' }, el('span', { textContent: 'Background' }), el('div', { className: 'stack' },
+        c.bgSeg, c.bgNow,
+        el('div', { className: 'line' }, btn('Next clip', () => send(sid, 'bgNext')),
+          fileButton('Add videos', 'video/*,.mp4,.mov,.m4v,.webm', (files) => send(sid, 'addBgFiles', files))),
+        c.bgLevel.wrap)),
+      el('div', { className: 'row' }, el('span', { textContent: 'Inputs' }), el('div', { className: 'line' },
+        btn('Camera on/off', () => send(sid, w.s.video === 'camera' ? 'videoOff' : 'camera')),
+        btn('Connect MIDI', () => send(sid, 'midi')))));
+    card.append(head, rows);
+    w.el = card;
+    w.c = c;
+    return card;
+  }
+  const setIfIdle = (input, value) => { if (document.activeElement !== input && String(input.value) !== String(value)) input.value = String(value); };
+  function link(node, text, href) {
+    node.replaceChildren();
+    if (!text) { node.textContent = '—'; return; }
+    if (href) node.append(el('a', { href, target: '_blank', rel: 'noopener', textContent: text }));
+    else node.textContent = text;
+  }
+  function updateCard(w) {
+    const s = w.s, c = w.c;
+    const dup = [...wins.values()].filter((x) => x.s.wid === s.wid).length > 1;
+    c.title.textContent = `Window ${s.wid}${dup ? ' (open twice)' : ''}`;
+    c.meta.textContent = `${s.scene} · ${s.fps} fps`;
+    const chips = [];
+    if (w.stale) chips.push(['not answering', true]);
+    if (s.full) chips.push(['fullscreen', false]);
+    if (!s.visible) chips.push(['hidden: visuals paused', true]);
+    if (s.audio.blocked) chips.push(['audio waiting for a click in that window', true]);
+    c.chips.replaceChildren(...chips.map(([t, warn]) => el('span', { className: 'chip' + (warn ? ' warn' : ''), textContent: t })));
+    c.bare.textContent = s.bare ? 'Show HUD' : 'Hide HUD';
+    if (c.scene.options.length !== s.scenes.length) c.scene.replaceChildren(...s.scenes.map((n) => el('option', { value: n, textContent: n })));
+    if (document.activeElement !== c.scene) c.scene.value = s.scenes.includes(s.scene) ? s.scene : '';
+    c.presets.textContent = `MilkDrop A · ${s.presets[0] || '—'}  ·  B · ${s.presets[1] || '—'}`;
+    for (const b of c.audioSeg.children) b.setAttribute('aria-checked', String(b.dataset.value === s.audio.mode));
+    link(c.audioNow, s.audio.now ? `♪ ${s.audio.now}` : s.audio.label, s.audio.link);
+    c.pause.textContent = s.audio.paused ? 'Play' : 'Pause';
+    for (const [sl, v] of [[c.volume, s.audio.volume], [c.lanes, s.audio.lanes], [c.bgLevel, s.bg.level], [c.speed, s.speed]]) {
+      setIfIdle(sl.input, v);
+      if (document.activeElement !== sl.input) sl.out.textContent = sl.fmt(+v);
+    }
+    for (const b of c.bgSeg.children) b.setAttribute('aria-checked', String(b.dataset.value === s.bg.mode));
+    link(c.bgNow, s.bg.now ? `▸ ${s.bg.now}` : (s.bg.mode === 'shader' ? 'the nebula shader' : s.bg.mode === 'off' ? 'black' : 'loading…'), s.bg.link);
+    w.el.classList.toggle('selected', selected === s.sid);
+    w.el.classList.toggle('stale', !!w.stale);
+  }
+  function render() {
+    const list = $('list');
+    const all = [...wins.values()].sort((a, b) => (Number(a.s.wid) - Number(b.s.wid)) || a.s.sid.localeCompare(b.s.sid));
+    if (!all.length) {
+      list.replaceChildren(el('div', { className: 'empty', textContent: 'No visuals windows are running. Press New visuals window to open one.' }));
+    } else {
+      const want = all.map((w) => w.el || buildCard(w.s.sid));
+      if (want.length !== list.children.length || want.some((n, k) => list.children[k] !== n)) list.replaceChildren(...want);
+      all.forEach(updateCard);
+    }
+    const missing = load().filter((wid) => !all.some((w) => w.s.wid === wid));
+    $('openAll').hidden = !missing.length;
+    $('openAll').textContent = missing.length > 1 ? `Reopen windows ${missing.join(', ')}` : `Reopen window ${missing[0] || ''}`;
+  }
+
+  /* ---------------------------------------------------------------- equations */
+  for (const [key, label] of BLOCKS) {
+    const b = el('button', { type: 'button', textContent: label });
+    b.setAttribute('role', 'tab');
+    b.dataset.key = key;
+    b.addEventListener('click', () => {
+      if (dirty && !confirmLeave()) return;
+      activeKey = key; dirty = false; fillEditor(true);
+    });
+    $('edTabs').append(b);
+  }
+  function confirmLeave() { setEd('You have unapplied changes here. Apply them, or press the tab again to drop them.', 'err'); dirty = false; return false; }
+  function setEd(msg, kind) { const s = $('edStatus'); s.textContent = msg; s.className = 'status' + (kind ? ' ' + kind : ''); }
+  function select(sid) {
+    selected = sid; blocks = null; dirty = false;
+    $('editor').hidden = false;
+    const w = wins.get(sid);
+    $('edTitle').textContent = `Equations · Window ${w ? w.s.wid : ''}`;
+    $('edCode').value = '';
+    setEd('Loading from the window…', '');
+    send(sid, 'getBlocks');
+    render();
+    $('editor').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  function fillEditor(announce) {
+    for (const b of $('edTabs').children) b.setAttribute('aria-selected', String(b.dataset.key === activeKey));
+    if (!blocks) return;
+    $('edCode').value = blocks.code[activeKey] || '';
+    if (announce) setEd(`Scene “${blocks.scene}” · ${BLOCKS.find((b) => b[0] === activeKey)[1]}. Ctrl or ⌘ + Enter applies.`, '');
+  }
+  $('edCode').addEventListener('input', () => { dirty = true; });
+  $('edCode').addEventListener('keydown', (e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); $('edApply').click(); } });
+  $('edApply').addEventListener('click', () => { if (selected) { send(selected, 'setBlock', { key: activeKey, src: $('edCode').value }); setEd('Sending…', ''); } });
+  $('edRevert').addEventListener('click', () => { if (selected) { dirty = false; send(selected, 'revertBlock', { key: activeKey }); } });
+  $('edReload').addEventListener('click', () => { if (selected) { dirty = false; send(selected, 'getBlocks'); } });
+
+  /* ---------------------------------------------------------------- messages */
+  chan.onmessage = (e) => {
+    const m = e.data || {};
+    if (m.t === 'status' && m.s && m.s.sid) {
+      const w = wins.get(m.s.sid) || {};
+      w.s = m.s; w.seen = Date.now(); w.stale = false;
+      wins.set(m.s.sid, w);
+      if (!w.el) render(); else updateCard(w);
+    } else if (m.t === 'bye') {
+      wins.delete(m.sid);
+      if (selected === m.sid) { selected = null; $('editor').hidden = true; }
+      render();
+    } else if (m.t === 'blocks' && m.sid === selected) {
+      const sceneChanged = !blocks || blocks.scene !== m.scene;
+      blocks = m;
+      if (!dirty || sceneChanged) { dirty = false; fillEditor(sceneChanged); }
+    } else if (m.t === 'result' && m.sid === selected) {
+      if (m.ok) dirty = false;
+      setEd(m.msg, m.ok ? 'ok' : 'err');
+    }
+  };
+  setInterval(() => {
+    const now = Date.now();
+    let changed = false;
+    for (const [sid, w] of wins) {
+      if (now - w.seen > 15000) { wins.delete(sid); changed = true; }
+      else if (now - w.seen > 4000 && !w.stale) { w.stale = true; changed = true; }
+    }
+    if (changed) render();
+  }, 1000);
+
+  chan.postMessage({ t: 'ping' });
+  render();
+  // When the launcher opens the panel, bring back the windows that were open last time (window 1 the first time).
+  setTimeout(() => {
+    if (!LAUNCH) { render(); return; }
+    let want = load();
+    if (!want.length) want = ['1'];
+    const missing = want.filter((wid) => !liveWids().includes(wid));
+    showBlocked(missing.filter((wid) => !openWindow(wid)));
+  }, 1500);
+})();
+</script>
+</body>
+</html>

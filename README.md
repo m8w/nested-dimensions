@@ -12,7 +12,8 @@ By xik6 (William Victor Newbold).
 - **Solids (v0.3).** Each screen can become a box, a cube or a sphere with its picture on every face. The solid's proportions come from the picture's, and the picture's brightness raises its surface.
 - **Video background (v0.3).** The dark space behind the solids fills with William Victor Newbold's videos from archive.org, crossfading nonstop. It can also play your own videos or a generated nebula.
 - **Nonstop audio (v0.2).** Archive radio plays the xik6 catalog from archive.org at random, crossfaded, on up to four lanes at once. It also plays your own files, shuffled, or follows a live input that reconnects by itself.
-- **Mac launcher (v0.3).** Double-click to open it in its own window, with sound that starts by itself and a window that reopens if it closes.
+- **Control panel and multiple windows (v0.4).** Run several visuals windows at once, each with its own scene, audio and background, and edit any of them from one control panel, even one that's fullscreen.
+- **Mac launcher (v0.3).** Double-click to open it in its own browser, with sound that starts by itself and windows that reopen if they close.
 - **Equations.** The camera and each plane run a small MilkDrop-flavoured program every frame that sets position, rotation, scale, opacity and glow from time, audio, tracks and MIDI. Edit them live in the page.
 - **Trails.** MilkDrop-style feedback behind everything: each frame zooms, turns and fades the last one.
 - **Four scenes:** orbit, stack, tunnel, lissajous.
@@ -58,27 +59,43 @@ Open **Sources → Background**:
 
 The background fills only what the 3D scene doesn't cover, so the solids stay solid. A little shows through their darkest parts, and it shows inside the nested frame. The Camera block can move it with `bg` (brightness, 1 = the level slider), `bgzoom`, `bgrot`, `bgx` and `bgy`; the scenes drift it against the camera for depth. Press **B** for the next clip.
 
+## Control panel and multiple windows
+
+Open **control.html** (the **Control panel** button or the **C** key in any visuals window, or the Mac launcher). It lists every Nested Dimensions window running in that browser and edits each one live:
+
+- **Scene:** pick a scene, go to the next one, or load new MilkDrop presets. Set the speed.
+- **Audio:** Archive radio, Files, Live input or Off. Skip, pause, volume and lanes. **Add audio files** sends files from the panel straight to that window.
+- **Background:** Archive video, Videos, Shader or Off, the next clip, the level, and adding videos.
+- **Inputs:** camera on or off, connect MIDI.
+- **Equations:** the full editor for the window you pick, with the same error messages as in the window.
+- **Window:** **Show** brings it to the front, even out of a fullscreen Space. **Fill screen** makes it cover its display while it stays on the normal desktop. **Hide HUD** hides its controls for a clean capture. **Reload** and **Close** do what they say.
+
+**New visuals window** opens another one (`?w=2`, `?w=3` …). Each window keeps its own scene, sources, levels and equation edits, and its title is "Nested Dimensions 2" and so on, so OBS can capture each one separately. New windows start with their sound at 0%: they still react to their own radio, but only window 1 is heard until you turn one up.
+
+For true macOS fullscreen, press Control-Command-F inside a visuals window. It moves to its own Space, and you keep editing it from the panel on your normal desktop.
+
+The panel and the windows talk over a BroadcastChannel, so they need to be in the same browser on the same computer.
+
 ## Mac launcher
 
-To put the launcher on your Desktop, paste this into Terminal once:
+To put the launcher on your Desktop, or to update it, paste this into Terminal:
 
 ```
-curl -fsSL https://m8w.github.io/nested-dimensions/launch/install-mac.sh | bash
+curl -fsSL "https://m8w.github.io/nested-dimensions/launch/install-mac.sh?v=4" | bash
 ```
 
-Then double-click **Nested Dimensions** on the Desktop. It opens the page fullscreen in its own Chrome window (Edge, Brave or Chromium also work), where:
+Then double-click **Nested Dimensions** on the Desktop. It opens the control panel and the visuals windows that were open last time (window 1 the first time), in their own Chrome (Edge, Brave or Chromium also work), where:
 
-- sound starts by itself, with no Start audio tap;
-- the page keeps full speed even when another window covers it;
+- sound starts by itself, with no Start audio click;
+- pages keep full speed even when another window covers them;
 - the Mac stays awake while it runs;
-- the window opens again if the browser closes or crashes.
+- everything opens again if the browser closes or crashes.
 
-It uses its own browser profile, so your everyday Chrome is untouched. macOS opens that browser as its own app, so the microphone, camera and MIDI permissions belong to Chrome; Terminal never asks for them. Allow them in that window once, and it remembers.
+It uses its own browser profile, so your everyday Chrome is untouched. macOS opens that browser as its own app, so the microphone, camera and MIDI permissions belong to it; Terminal never asks for them. Allow them once and they're remembered.
 
-- **Get to it:** Command-Tab to the second Chrome icon, or click it in the Dock. If it isn't fullscreen, press Control-Command-F.
+- **Lost the control panel?** Double-click the launcher again; it brings the panel back without restarting anything.
 - **Stop it:** press Control-C in the launcher's Terminal window. Only that window; other Terminal windows keep running.
-- **Update it:** run the install line again.
-- **Settings:** the launcher is [`launch/Nested Dimensions.command`](launch/Nested%20Dimensions.command). Set `ND_WINDOW=1` for a window instead of fullscreen, and `ND_WIDTH` and `ND_HEIGHT` for the window size.
+- **Settings:** the launcher is [`launch/Nested Dimensions.command`](launch/Nested%20Dimensions.command). `ND_URL` points it at another copy of the site, for example a local one.
 
 ## Running it
 
@@ -95,7 +112,7 @@ It uses its own browser profile, so your everyday Chrome is untouched. macOS ope
 
 The page remembers the audio source, camera and MIDI, so after a reload (or an 11:45 cycle restart) it reconnects everything the browser has already allowed.
 
-Keys: **H** controls · **F** fullscreen · **S** next scene · **N** new MilkDrop presets · **K** skip track · **B** next background clip · **E** equations · **Ctrl/⌘ + Enter** apply an edit.
+Keys: **H** controls · **F** fullscreen · **C** control panel · **S** next scene · **N** new MilkDrop presets · **K** skip track · **B** next background clip · **E** equations · **Ctrl/⌘ + Enter** apply an edit.
 
 ## The equation language
 

@@ -178,7 +178,7 @@ input[type="text"]::placeholder { color: var(--dim); opacity: 0.8; }
 
 <header class="mast" id="mast">
   <div class="plate ident">
-    <div class="wordmark">nested dimensions<small>v0.3</small></div>
+    <div class="wordmark">nested dimensions<small id="verTag">v0.4</small></div>
     <div class="readout"><b id="sceneLabel">orbit</b> · <span id="fpsLabel">-- fps</span> · <span id="audioLabel">no audio</span></div>
     <div class="now" id="nowLine" hidden><b>♪</b><span id="nowTitle"></span></div>
     <div class="presets">
@@ -298,6 +298,7 @@ input[type="text"]::placeholder { color: var(--dim); opacity: 0.8; }
     <button class="key" id="btnSources" type="button" aria-pressed="false">Sources</button>
     <button class="key" id="btnSkip" type="button" hidden>Skip track</button>
     <button class="key" id="btnEq" type="button" aria-pressed="false">Equations</button>
+    <button class="key" id="btnControl" type="button" data-standalone>Control panel</button>
     <button class="key" id="btnHide" type="button">Hide controls</button>
     <button class="key" id="btnFull" type="button" hidden>Fullscreen</button>
   </div>
@@ -326,6 +327,10 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.m
 /* ------------------------------------------------------------------ build + helpers */
 const BUILD = 'standalone';            // 'standalone' (GitHub Pages) or 'artifact' (sandboxed preview)
 const STANDALONE = BUILD === 'standalone';
+// Several visuals windows can run at once (?w=2, ?w=3 …). Each keeps its own scene, sources and edits.
+const WID = (() => { try { return (new URLSearchParams(location.search).get('w') || '1').replace(/[^\w-]/g, '').slice(0, 12) || '1'; } catch (e) { return '1'; } })();
+const NS = WID === '1' ? '' : '.w' + WID;
+if (WID !== '1') document.title = `Nested Dimensions ${WID}`;
 const $ = (id) => document.getElementById(id);
 for (const el of document.querySelectorAll('[data-standalone]')) if (!STANDALONE) el.hidden = true;
 for (const el of document.querySelectorAll('[data-artifact]')) if (STANDALONE) el.hidden = true;
@@ -967,7 +972,7 @@ function resize() {
 }
 
 /* ------------------------------------------------------------------ settings kept between visits */
-const PREFS_KEY = 'nd.prefs.v2';
+const PREFS_KEY = 'nd.prefs.v2' + NS;
 let prefs = {};
 try { prefs = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}') || {}; } catch (e) { prefs = {}; }
 function savePrefs() { try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch (e) { /* storage off */ } }
@@ -1068,7 +1073,7 @@ function iaQueryFrom(text) {
 }
 const engine = {
   mode: 'off', gen: 0, lanes: [], paused: false, blocked: false, blockedBy: '', suspendSince: 0, lastResume: 0,
-  laneCount: clamp(Math.round(num(prefs.lanes, 1)), 1, 4), fade: clamp(num(prefs.fade, 6), 0, 12), volume: clamp(num(prefs.volume, 0.9), 0, 1),
+  laneCount: clamp(Math.round(num(prefs.lanes, 1)), 1, 4), fade: clamp(num(prefs.fade, 6), 0, 12), volume: clamp(num(prefs.volume, WID === '1' ? 0.9 : 0), 0, 1),
   maxPlay: 0, newtrack: 0, lastStarted: null, files: [], bag: [],
   query: iaQueryFrom(prefs.queryText),
   ia: { ids: null, idsQuery: '', fetching: null, meta: new Map(), bad: new Set(), recent: loadList('nd.recent.v1'), played: loadList('nd.played.v1'), note: '', noteKind: '' },
@@ -1729,8 +1734,8 @@ syncMilkdropPlanes();
 
 /* ------------------------------------------------------------------ equation state */
 let savedEdits = {};
-try { savedEdits = JSON.parse(localStorage.getItem('nd.edits.v1') || '{}') || {}; } catch (e) { savedEdits = {}; }
-const persistEdits = () => { try { localStorage.setItem('nd.edits.v1', JSON.stringify(savedEdits)); } catch (e) { /* storage off */ } };
+try { savedEdits = JSON.parse(localStorage.getItem('nd.edits.v1' + NS) || '{}') || {}; } catch (e) { savedEdits = {}; }
+const persistEdits = () => { try { localStorage.setItem('nd.edits.v1' + NS, JSON.stringify(savedEdits)); } catch (e) { /* storage off */ } };
 
 const state = { sceneIndex: 0, sceneName: '', base: {}, code: {}, run: {}, vars: {}, broken: {} };
 function setBlock(key, src) {
@@ -1755,7 +1760,7 @@ function loadScene(sc) {
 function nextScene() {
   state.sceneIndex = (Math.max(state.sceneIndex, -1) + 1) % SCENES.length;
   loadScene(SCENES[state.sceneIndex]);
-  try { localStorage.setItem('nd.scene.v1', String(state.sceneIndex)); } catch (e) { /* storage off */ }
+  try { localStorage.setItem('nd.scene.v1' + NS, String(state.sceneIndex)); } catch (e) { /* storage off */ }
 }
 
 const inputs = Object.create(null);
@@ -2550,7 +2555,7 @@ window.addEventListener('keydown', (e) => {
 
 /* ------------------------------------------------------------------ loop */
 let startIndex = 0;
-try { startIndex = clamp(parseInt(localStorage.getItem('nd.scene.v1') || '0', 10) || 0, 0, SCENES.length - 1); } catch (e) { startIndex = 0; }
+try { startIndex = clamp(parseInt(localStorage.getItem('nd.scene.v1' + NS) || '0', 10) || 0, 0, SCENES.length - 1); } catch (e) { startIndex = 0; }
 state.sceneIndex = startIndex;
 loadScene(SCENES[startIndex]);
 
@@ -2631,6 +2636,108 @@ async function bootSources() {
 }
 refreshAudioUI();
 bootSources();
+
+/* ------------------------------------------------------------------ remote control (GitHub Pages build)
+   The control panel (control.html) and every visuals window talk over a BroadcastChannel, so any window
+   can be edited from the panel, even one sitting fullscreen in its own Space. */
+const SID = Math.random().toString(36).slice(2, 10);
+let remote = null;
+if (WID !== '1') $('verTag').textContent = `v0.4 · window ${WID}`;
+function remoteStatus() {
+  const t = engine.lastStarted && engine.lastStarted.lane.cur === engine.lastStarted ? engine.lastStarted : null;
+  const clip = bg.fading && bg.b ? bg.b : bg.a;
+  return {
+    wid: WID, sid: SID, title: document.title, scene: state.sceneName, scenes: SCENES.map((x) => x.name),
+    fps: Math.round(fps), visible: document.visibilityState === 'visible', full: !!document.fullscreenElement, bare, speed,
+    popup: !!window.opener, presets: milkdrops.map((m) => (m.ok ? m.name : 'built-in shader')),
+    audio: {
+      mode: engine.mode, label: audioLabelText(), now: t ? t.info.title : '', link: t ? t.info.link : '',
+      volume: engine.volume, lanes: engine.laneCount, fade: engine.fade, paused: engine.paused, blocked: engine.blocked, files: engine.files.length,
+    },
+    bg: { mode: bg.mode, level: bg.level, now: clip ? clip.info.title : '', link: clip ? clip.info.link : '', files: bg.files.length },
+    video: video.active ? (video.stream ? 'camera' : 'file') : 'fractal',
+  };
+}
+function remoteSend(msg) { try { if (remote) remote.postMessage(msg); } catch (e) { /* channel closed */ } }
+function setRange(id, v) { const el = $(id); el.value = String(v); el.dispatchEvent(new Event('input')); }
+function sendBlocks() { remoteSend({ t: 'blocks', sid: SID, scene: state.sceneName, code: { ...state.code }, base: { ...state.base } }); }
+function remoteSetBlock(key, src) {
+  if (!BLOCKS.some((b) => b.key === key)) return { ok: false, msg: 'There is no block by that name.' };
+  if (String(src).trim().startsWith('{')) { loadSceneJSON(src, 'pasted scene'); return { ok: true, msg: `Loaded the scene “${state.sceneName}”.` }; }
+  try {
+    setBlock(key, src);
+    const scEdits = (savedEdits[state.sceneName] = savedEdits[state.sceneName] || {});
+    if (src === (state.base[key] || '')) delete scEdits[key]; else scEdits[key] = src;
+    persistEdits();
+    if (key === activeBlock) refreshEditor();
+    return { ok: true, msg: `Applied to ${labelOf(key)}. Running now.` };
+  } catch (e) { return { ok: false, msg: `${e.message}. The previous version keeps running.` }; }
+}
+const REMOTE = {
+  scene: (name) => { const k = SCENES.findIndex((x) => x.name === name); if (k >= 0) { state.sceneIndex = k - 1; nextScene(); } },
+  nextScene: () => nextScene(),
+  presets: () => newPresets(1.5),
+  audioMode: (m) => setMode(m, false),
+  volume: (v) => setRange('vol', v),
+  lanes: (n) => setRange('lanes', n),
+  fade: (x) => setRange('xfade', x),
+  skip: () => skipTrack(),
+  pause: () => setPaused(!engine.paused),
+  start: () => unlockAudio(),
+  addFiles: (files) => addFiles(files),
+  live: () => setMode('live', false, true),
+  bgMode: (m) => setBgMode(m, false),
+  bgLevel: (v) => setRange('bgLevel', v),
+  bgNext: () => { bg.skip = true; bg.idleUntil = 0; bgTick(); },
+  addBgFiles: (files) => addBgFiles(files),
+  camera: () => startCamera(false),
+  videoOff: () => stopVideo(),
+  midi: () => startMidi(false),
+  speed: (v) => setRange('speed', v),
+  bare: (on) => setBare(!!on),
+  fill: () => { try { window.moveTo(screen.availLeft || 0, screen.availTop || 0); window.resizeTo(screen.availWidth, screen.availHeight); } catch (e) { /* not a pop-up window */ } },
+  size: (wh) => { try { window.resizeTo(wh[0], wh[1]); } catch (e) { /* not a pop-up window */ } },
+  focus: () => window.focus(),
+  reload: () => location.reload(),
+  close: () => window.close(),
+};
+if (STANDALONE && 'BroadcastChannel' in window) {
+  remote = new BroadcastChannel('nested-dimensions');
+  remote.onmessage = (e) => {
+    const m = e.data || {};
+    if (m.t === 'ping') { remoteSend({ t: 'status', s: remoteStatus() }); return; }
+    if (m.t !== 'cmd' || (m.to !== SID && m.to !== '*')) return;
+    if (m.cmd === 'getBlocks') { sendBlocks(); return; }
+    if (m.cmd === 'setBlock' || m.cmd === 'revertBlock') {
+      const key = m.arg && m.arg.key;
+      const r = m.cmd === 'setBlock' ? remoteSetBlock(key, m.arg.src) : remoteSetBlock(key, state.base[key] || '');
+      remoteSend({ t: 'result', sid: SID, key, ...r });
+      sendBlocks();
+      return;
+    }
+    const fn = REMOTE[m.cmd];
+    if (!fn) return;
+    try { fn(m.arg); } catch (err) { remoteSend({ t: 'result', sid: SID, ok: false, msg: err.message }); }
+    if (m.cmd === 'scene' || m.cmd === 'nextScene') sendBlocks();
+    setTimeout(() => remoteSend({ t: 'status', s: remoteStatus() }), 200);
+  };
+  setInterval(() => remoteSend({ t: 'status', s: remoteStatus() }), 1000);
+  addEventListener('pagehide', () => remoteSend({ t: 'bye', sid: SID }));
+}
+function openControl() {
+  try {
+    if (window.opener && !window.opener.closed && /control\.html$/.test(window.opener.location.pathname)) { window.opener.focus(); return; }
+  } catch (e) { /* opener is elsewhere */ }
+  const w = window.open('control.html', 'nd-control', 'popup,width=560,height=980,left=0,top=0');
+  if (w) w.focus();
+  else toast('The browser blocked the control panel window. Allow pop-ups for this site, or open control.html.');
+}
+$('btnControl').addEventListener('click', openControl);
+window.addEventListener('keydown', (e) => {
+  const t = e.target;
+  if (t && t.closest && t.closest('textarea, input, select')) return;
+  if (!e.metaKey && !e.ctrlKey && !e.altKey && e.key.toLowerCase() === 'c' && STANDALONE) openControl();
+});
 
 window.nestedDimensions = {
   EQ, state, planes, milkdrops, engine, audio, setMode, skipTrack, setPaused, bg, setBgMode, blitUniforms: blitMat.uniforms,
