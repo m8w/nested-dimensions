@@ -178,7 +178,7 @@ input[type="text"]::placeholder { color: var(--dim); opacity: 0.8; }
 
 <header class="mast" id="mast">
   <div class="plate ident">
-    <div class="wordmark">nested dimensions<small id="verTag">v0.4</small></div>
+    <div class="wordmark">nested dimensions<small id="verTag">v0.5</small></div>
     <div class="readout"><b id="sceneLabel">orbit</b> · <span id="fpsLabel">-- fps</span> · <span id="audioLabel">no audio</span></div>
     <div class="now" id="nowLine" hidden><b>♪</b><span id="nowTitle"></span></div>
     <div class="presets">
@@ -222,12 +222,18 @@ input[type="text"]::placeholder { color: var(--dim); opacity: 0.8; }
         <dt>solid outputs</dt><dd>depth: 0 a flat screen, 0.9 about a cube · round: 0 a box, 1 a sphere · relief: the picture’s brightness pushes the surface out (0.1 gentle, 0.5 strong, negative carves in)</dd>
         <dt>camera outputs</dt><dd>cx cy cz position · tx ty tz target · fov in degrees · roll · fit distance multiplier · zoom, rot, decay for trails (decay 0 turns them off)</dd>
         <dt>background outputs</dt><dd>set in the Camera block: bg brightness (1 = the level slider, 0 hides it) · bgzoom · bgrot in radians · bgx bgy pan</dd>
+        <dt>complex time</dt><dd>tim is the imaginary part of the clock (time is the real part) · theta, set in the Camera block, turns the clock: 0 forward, pi backward, pi/2 imaginary</dd>
+        <dt>plane source</dt><dd>src = 0 its own picture · 1 4D fractal dive · 2 Lorenz in complex time · 3 flow field · 4 oscilloscope w x y z · 5–8 w, x, y or z alone · 9 MilkDrop A · 10 Stream · 11 MilkDrop B · 12 Nested</dd>
+        <dt>4D fractal</dt><dd>set in the Camera block: jphi slice in radians (0 Mandelbrot, pi/2 Julia) · jcr jci the Julia c · jdive octaves per second · jtwist slice turn per unit of tim · jmax deepest octave · input jdepth</dd>
+        <dt>other add-ins</dt><dd>Camera block: lspan Lorenz window · lflow how fast its start point moves · fsel flow field 0–3 · osys oscilloscope system 0–2 · orate its speed · inputs owr owi oxr oxi oyr oyi ozr ozi (−1 to 1) and oblow, a pulse when it meets a singularity</dd>
         <dt>functions</dt><dd>sin cos tan asin acos atan atan2 abs sqrt sqr pow exp log log10 floor ceil int min max sign clamp mix fract tri noise rand frand above below equal band bor bnot if(test, a, b)</dd>
         <dt>syntax</dt><dd>statements end with ; · ^ is power · // starts a comment · any new name is a variable that keeps its value between frames · paste scene JSON here and press Apply to load it</dd>
       </dl>
     </details>
     <p class="hint" data-artifact>Archive radio, live audio (BlackHole or a mic), camera (OBS Virtual Camera) and MIDI run in the GitHub Pages version of this page. Here, open Sources to play your own audio files nonstop, or load a video file.</p>
   </section>
+
+  <section class="sheet" id="dimSheet" aria-label="Dimensions" hidden></section>
 
   <section class="sheet" id="srcSheet" aria-label="Sources" hidden>
     <div class="sec">
@@ -298,6 +304,7 @@ input[type="text"]::placeholder { color: var(--dim); opacity: 0.8; }
     <button class="key" id="btnSources" type="button" aria-pressed="false">Sources</button>
     <button class="key" id="btnSkip" type="button" hidden>Skip track</button>
     <button class="key" id="btnEq" type="button" aria-pressed="false">Equations</button>
+    <button class="key" id="btnDim" type="button" aria-pressed="false" hidden>Dimensions</button>
     <button class="key" id="btnControl" type="button" data-standalone>Control panel</button>
     <button class="key" id="btnHide" type="button">Hide controls</button>
     <button class="key" id="btnFull" type="button" hidden>Fullscreen</button>
@@ -668,6 +675,105 @@ const SCENES = [
       'ry = sin(time*0.1)*0.3;',
       'a = 0.75;')),
   },
+  {
+    name: 'dimensions',
+    camera: lines(
+      '// The add-ins: a 4D fractal dive, the Lorenz system in complex time and a complex flow field.',
+      '// Dimensions → Time compass turns every clock here. To steer it from MIDI instead:',
+      '// theta = (cc1*2 - 1)*pi;',
+      'cx = sin(time*0.08)*1.6;',
+      'cy = 0.6 + sin(time*0.05)*0.4;',
+      'cz = 8;',
+      'fov = 55;',
+      'zoom = 1.008; rot = 0.001; decay = 0.86;',
+      'bgx = -cx*0.015; bgzoom = 1.06;',
+      '// the oscilloscope\'s w, x, y, z (owr, owi … ozi, each -1 to 1) push the solids around',
+      'q1 = time*0.16 + bass_att*0.15;'),
+    planes: {
+      mdA: lines(
+        '// The 4D Julia-Mandelbrot dive. src picks what a plane shows (see Dimensions → Plane sources).',
+        'src = 1;',
+        'ph = q1;',
+        'x = cos(ph)*3.2 + owr*0.5;',
+        'z = sin(ph)*3.2 + owi*0.5;',
+        'y = oxr*0.5;',
+        'ry = pi/2 - ph;',
+        'sx = 1.9 + bass*0.1; sy = sx;',
+        'depth = 0.12;',
+        'relief = 0.06 + 0.1*bass_att;',
+        'bright = 1 + onset*0.4 + oblow*0.6;'),
+      stream: lines(
+        '// The Lorenz system in complex time. The gold cuts mark its singularities.',
+        'src = 2;',
+        'ph = q1 + tau/3;',
+        'x = cos(ph)*3.2 + oyr*0.5;',
+        'z = sin(ph)*3.2 + oyi*0.5;',
+        'y = ozr*0.5;',
+        'ry = pi/2 - ph;',
+        'sx = 1.7; sy = sx;',
+        'depth = 0.9*(0.5 + 0.5*sin(time*0.09));',
+        'round = 0.5 + 0.5*sin(time*0.06 + 1);',
+        'relief = 0.05;'),
+      mdB: lines(
+        '// The flow field: centres, sinks and sources trade places as the time compass turns.',
+        'src = 3;',
+        'ph = q1 + 2*tau/3;',
+        'x = cos(ph)*3.2 + ozr*0.5;',
+        'z = sin(ph)*3.2 + ozi*0.5;',
+        'y = owi*0.5;',
+        'ry = pi/2 - ph;',
+        'sx = 1.7; sy = sx;',
+        'add = 1; a = 0.9;'),
+      nest: lines(
+        '// The whole scene, nested inside itself. Imaginary time (tim) turns it too.',
+        'ry = sin(time*0.11)*0.4;',
+        'rz = time*0.03 + tim*0.2;',
+        'sx = 2.3 + treb*0.08; sy = sx;'),
+    },
+  },
+  {
+    name: 'oscilloscope',
+    camera: lines(
+      '// w, x, y, z: four complex variables, each drawn in its own complex plane, on its own solid.',
+      '// Choose the system in Dimensions → Oscilloscope. The time compass turns their flow too.',
+      'cx = sin(time*0.06)*2;',
+      'cy = 0.4 + sin(time*0.04)*0.5;',
+      'cz = 7.5;',
+      'fov = 55;',
+      'zoom = 1.004; rot = 0.0008; decay = 0.8;',
+      'bgzoom = 1.08;',
+      'q1 = time*0.1;'),
+    planes: {
+      mdA: lines(
+        '// w, moved by its own value',
+        'src = 5;',
+        'x = -1.9 + owr*0.7; y = 1.05 + owi*0.7;',
+        'ry = sin(q1)*0.35 + owi*0.3; rx = owr*0.25;',
+        'sx = 1.7; sy = sx; depth = 0.25; round = 0.25;',
+        'add = 1; bright = 1 + oblow;'),
+      stream: lines(
+        '// x',
+        'src = 6;',
+        'x = 1.9 + oxr*0.7; y = 1.05 + oxi*0.7;',
+        'ry = sin(q1 + 1)*0.35 + oxi*0.3; rx = oxr*0.25;',
+        'sx = 1.7; sy = sx; depth = 0.25; round = 0.25;',
+        'add = 1; bright = 1 + oblow;'),
+      mdB: lines(
+        '// y',
+        'src = 7;',
+        'x = -1.9 + oyr*0.7; y = -1.05 + oyi*0.7;',
+        'ry = sin(q1 + 2)*0.35 + oyi*0.3; rx = oyr*0.25;',
+        'sx = 1.7; sy = sx; depth = 0.25; round = 0.25;',
+        'add = 1; bright = 1 + oblow;'),
+      nest: lines(
+        '// z, on the nested plane',
+        'src = 8;',
+        'x = 1.9 + ozr*0.7; y = -1.05 + ozi*0.7;',
+        'ry = sin(q1 + 3)*0.35 + ozi*0.3; rx = ozr*0.25;',
+        'sx = 1.7; sy = sx; depth = 0.25; round = 0.25;',
+        'bright = 1 + oblow;'),
+    },
+  },
 ];
 
 /* ------------------------------------------------------------------ renderer */
@@ -930,13 +1036,38 @@ for (const key of PLANE_KEYS) {
   const mesh = new THREE.Mesh(SCREEN_GEO, mat);
   mesh.frustumCulled = false;      // the shader reshapes it beyond the cube's bounds
   scene.add(mesh);
-  planes[key] = { key, mesh, mat, srcAspect: 16 / 9 };
+  planes[key] = { key, mesh, mat, srcAspect: 16 / 9, own: { tex: BLACK_TEX, aspect: 16 / 9 }, src: 0 };
 }
-// Point a screen at a picture. The solid's proportions follow the picture's, kept between portrait and wide.
+// Point a screen at its own picture. The solid's proportions follow the picture's, kept between portrait and wide.
+// When a plane shows another source (src), its own picture is kept for when it comes back.
 function setScreen(key, tex, srcAspect) {
   const p = planes[key];
-  p.mat.uniforms.map.value = tex || BLACK_TEX;
-  p.srcAspect = clamp(srcAspect || 16 / 9, 0.6, 2.4);
+  p.own = { tex: tex || BLACK_TEX, aspect: srcAspect || 16 / 9 };
+  if (p.src) return;
+  p.mat.uniforms.map.value = p.own.tex;
+  p.srcAspect = clamp(p.own.aspect, 0.6, 2.4);
+}
+// src 9-12 show another plane's own picture; 1-8 come from the add-ins
+const BUILTIN_SOURCES = [{ id: 9, name: 'MilkDrop A', key: 'mdA' }, { id: 10, name: 'Stream', key: 'stream' }, { id: 11, name: 'MilkDrop B', key: 'mdB' }, { id: 12, name: 'Nested', key: 'nest' }];
+let ADD = null;   // the add-ins (addins.js), once loaded
+function pickSource(id) {
+  if (!id) return null;
+  const b = BUILTIN_SOURCES.find((s) => s.id === id);
+  if (b) return b.key === 'nest' ? { tex: rtRead.texture, aspect } : planes[b.key].own;
+  return ADD ? ADD.source(id) : null;
+}
+const usedSources = new Set();
+function routePlane(p, id) {
+  const s = pickSource(id);
+  if (s) {
+    p.src = id;
+    p.mat.uniforms.map.value = s.tex;
+    p.srcAspect = clamp(s.aspect, 0.6, 2.4);
+  } else if (p.src) {
+    p.src = 0;
+    p.mat.uniforms.map.value = p.own.tex;
+    p.srcAspect = clamp(p.own.aspect, 0.6, 2.4);
+  }
 }
 setScreen('stream', procStream.tex, 16 / 9);
 
@@ -1793,6 +1924,8 @@ function fillInputs(t, dt, fps, frameCount) {
   inputs.newtrack = engine.newtrack;
   inputs.lanes = engine.lanes.filter((l) => l.cur).length;
   inputs.aspect = aspect; inputs.pi = Math.PI; inputs.tau = Math.PI * 2; inputs.n = PLANE_KEYS.length;
+  inputs.tim = imTime;
+  if (ADD) ADD.fillInputs(inputs);
 }
 function applyLook(plane, v) {
   const m = plane.mat, u = m.uniforms;
@@ -1813,7 +1946,8 @@ function evaluate() {
   for (const k in extra) delete extra[k];
   const fitDefault = Math.pow(Math.max(1, 1.3 / aspect), 0.55);
   extra.fit = fitDefault;
-  const cv = runBlock('camera', CAM_DEFAULTS);
+  const cv = runBlock('camera', ADD ? { ...CAM_DEFAULTS, ...ADD.camDefaults() } : CAM_DEFAULTS);
+  if (ADD) ADD.fromCamera(cv);
   const tx = num(cv.tx, 0), ty = num(cv.ty, 0), tz = num(cv.tz, 0);
   const f = clamp(num(cv.fit, fitDefault), 0.1, 10);
   camera.position.set(tx + (num(cv.cx, 0) - tx) * f, ty + (num(cv.cy, 0) - ty) * f, tz + (num(cv.cz, 6) - tz) * f);
@@ -1836,15 +1970,19 @@ function evaluate() {
 
   delete extra.fit;
   for (let k = 1; k <= 8; k++) extra['q' + k] = num(cv['q' + k], 0);
+  usedSources.clear();
   PLANE_KEYS.forEach((key, i) => {
     extra.i = i;
-    const v = runBlock(key, PLANE_DEFAULTS);
+    const v = runBlock(key, { ...PLANE_DEFAULTS, src: ADD ? ADD.planeSrc(i) : 0 });
+    routePlane(planes[key], clamp(Math.round(num(v.src, 0)), 0, 12));
     const mesh = planes[key].mesh;
     mesh.position.set(num(v.x, 0), num(v.y, 0), num(v.z, 0));
     mesh.rotation.set(num(v.rx, 0), num(v.ry, 0), num(v.rz, 0));
     const sx = num(v.sx, 1) || 1e-4, sy = num(v.sy, 1) || 1e-4, sz = num(v.sz, 0);
     mesh.scale.set(sx, sy, sz > 0 ? sz : Math.sqrt(Math.abs(sx * sy)));
     applyLook(planes[key], v);
+    const src = planes[key].src;
+    if (mesh.visible && src >= 1 && src <= 8) usedSources.add(src);   // only pictures someone can see get drawn
   });
 }
 
@@ -2370,7 +2508,7 @@ function setBare(on) {
   document.body.style.cursor = on ? 'none' : '';
   if (on && !bareHintShown) { bareHintShown = true; toast('Controls hidden. Click or tap the stage, or press H, to bring them back.', 2600); }
 }
-const SHEETS = { eqSheet: 'btnEq', srcSheet: 'btnSources' };
+const SHEETS = { eqSheet: 'btnEq', srcSheet: 'btnSources', dimSheet: 'btnDim' };
 function toggleSheet(id) {
   const opening = $(id).hidden;
   for (const s in SHEETS) { $(s).hidden = true; $(SHEETS[s]).setAttribute('aria-pressed', 'false'); }
@@ -2498,6 +2636,7 @@ $('fileBg').addEventListener('change', (e) => {
 });
 $('midiStart').addEventListener('click', () => startMidi(true));
 $('btnEq').addEventListener('click', () => toggleSheet('eqSheet'));
+$('btnDim').addEventListener('click', () => toggleSheet('dimSheet'));
 $('btnHide').addEventListener('click', () => setBare(true));
 $('btnFull').addEventListener('click', toggleFullscreen);
 $('stage').addEventListener('click', () => { if (bare) setBare(false); });
@@ -2550,6 +2689,7 @@ window.addEventListener('keydown', (e) => {
   else if (k === 'k') skipTrack();
   else if (k === 'b') { bg.skip = true; bg.idleUntil = 0; bgTick(); }
   else if (k === 'e') { if (bare) setBare(false); toggleSheet('eqSheet'); }
+  else if (k === 'd' && ADD) { if (bare) setBare(false); toggleSheet('dimSheet'); }
   else if (k === 'f') toggleFullscreen();
 });
 
@@ -2559,7 +2699,10 @@ try { startIndex = clamp(parseInt(localStorage.getItem('nd.scene.v1' + NS) || '0
 state.sceneIndex = startIndex;
 loadScene(SCENES[startIndex]);
 
-let last = performance.now(), simTime = 0, frames = 0, fps = 60, hudClock = 0;
+// Complex time: the clock moves along e^(i theta). simTime (the equations' time) is its real part, imTime its
+// imaginary part. With theta = 0, which is the default, it is the ordinary clock.
+let last = performance.now(), simTime = 0, imTime = 0, frames = 0, fps = 60, hudClock = 0;
+const clock = { re: 0, im: 0 };
 function hud(dt) {
   $('mBass').style.transform = `scaleX(${Math.min(1, audio.bands.bass / 2.5)})`;
   $('mMid').style.transform = `scaleX(${Math.min(1, audio.bands.mid / 2.5)})`;
@@ -2578,17 +2721,21 @@ function frame(now) {
   const dt = Math.min(0.1, Math.max(0, (now - last) / 1000));
   last = now;
   if (dt > 0) fps += (1 / dt - fps) * 0.05;
-  simTime += dt * speed;
+  const theta = ADD ? ADD.theta : 0;
+  simTime += dt * speed * Math.cos(theta);
+  imTime += dt * speed * Math.sin(theta);
   frames++;
   resize();
   updateAudio(dt);
   updateMidi(dt);
   engine.newtrack *= Math.exp(-dt * 1.2);
+  if (ADD) { clock.re = simTime; clock.im = imTime; try { ADD.step(dt * speed, clock); } catch (e) { addinFailed(e); } }
   fillInputs(simTime, dt, fps, frames);
   evaluate();
 
   for (const md of milkdrops) {
     if (!md.ok) continue;
+    if (!PLANE_KEYS.some((k) => planes[k].mesh.visible && planes[k].mat.uniforms.map.value === md.tex)) continue;   // not on any plane
     try { md.viz.render(); md.tex.needsUpdate = true; }
     catch (e) { md.ok = false; md.error = e; syncMilkdropPlanes(); }
   }
@@ -2601,6 +2748,7 @@ function frame(now) {
     renderer.setRenderTarget(p.rt);
     renderer.render(procScene, blitCam);
   }
+  if (ADD) { try { ADD.render(usedSources, simTime); } catch (e) { addinFailed(e); } }
   trailMat.uniforms.tPrev.value = rtRead.texture;
   bgFrame(dt);
 
@@ -2642,7 +2790,7 @@ bootSources();
    can be edited from the panel, even one sitting fullscreen in its own Space. */
 const SID = Math.random().toString(36).slice(2, 10);
 let remote = null;
-if (WID !== '1') $('verTag').textContent = `v0.4 · window ${WID}`;
+if (WID !== '1') $('verTag').textContent = `v0.5 · window ${WID}`;
 function remoteStatus() {
   const t = engine.lastStarted && engine.lastStarted.lane.cur === engine.lastStarted ? engine.lastStarted : null;
   const clip = bg.fading && bg.b ? bg.b : bg.a;
@@ -2656,6 +2804,7 @@ function remoteStatus() {
     },
     bg: { mode: bg.mode, level: bg.level, now: clip ? clip.info.title : '', link: clip ? clip.info.link : '', files: bg.files.length },
     video: video.active ? (video.stream ? 'camera' : 'file') : 'fractal',
+    dim: ADD ? ADD.status() : null,
   };
 }
 function remoteSend(msg) { try { if (remote) remote.postMessage(msg); } catch (e) { /* channel closed */ } }
@@ -2694,6 +2843,7 @@ const REMOTE = {
   videoOff: () => stopVideo(),
   midi: () => startMidi(false),
   speed: (v) => setRange('speed', v),
+  dim: (a) => { if (ADD && a && typeof a.k === 'string') ADD.set(a.k, a.v); },
   bare: (on) => setBare(!!on),
   fill: () => { try { window.moveTo(screen.availLeft || 0, screen.availTop || 0); window.resizeTo(screen.availWidth, screen.availHeight); } catch (e) { /* not a pop-up window */ } },
   size: (wh) => { try { window.resizeTo(wh[0], wh[1]); } catch (e) { /* not a pop-up window */ } },
@@ -2739,9 +2889,33 @@ window.addEventListener('keydown', (e) => {
   if (!e.metaKey && !e.ctrlKey && !e.altKey && e.key.toLowerCase() === 'c' && STANDALONE) openControl();
 });
 
+/* ------------------------------------------------------------------ add-ins (addins.js)
+   Complex time, the 4D fractal dive, Lorenz in complex time, the flow field and the oscilloscope.
+   They load separately, so if they can't, everything else runs as before. */
+function addinFailed(e) {
+  console.error('Nested Dimensions add-ins stopped:', e);
+  ADD = null;
+  for (const k of PLANE_KEYS) routePlane(planes[k], 0);
+  $('btnDim').hidden = true;
+  if (!$('dimSheet').hidden) toggleSheet('dimSheet');
+  toast(`The Dimensions add-ins stopped (${e && e.message ? e.message : e}). Everything else keeps running.`, 8000);
+}
+import('./addins.js?v=5').then((m) => {
+  ADD = m.install({
+    THREE, renderer, coarse, $, toast, NS, FULL_GEO, FULL_VS, blitCam,
+    PLANES: PLANE_KEYS.map((key) => ({ key, label: labelOf(key) })),
+    BUILTIN: BUILTIN_SOURCES.map(({ id, name }) => ({ id, name })),
+  });
+  $('btnDim').hidden = false;
+}).catch((e) => {
+  console.error('Nested Dimensions add-ins did not load:', e);
+  if (STANDALONE) toast('The Dimensions add-ins didn’t load, so complex time and the new pictures are off. Everything else runs.', 6000);
+});
+
 window.nestedDimensions = {
   EQ, state, planes, milkdrops, engine, audio, setMode, skipTrack, setPaused, bg, setBgMode, blitUniforms: blitMat.uniforms,
-  get fps() { return fps; }, get frames() { return frames; },
+  get fps() { return fps; }, get frames() { return frames; }, get addins() { return ADD; },
+  get clock() { return { re: simTime, im: imTime }; }, renderer, rtRead: () => rtRead,
 };
 window.__ndReady = true;
 clearTimeout(window.__ndBoot);
