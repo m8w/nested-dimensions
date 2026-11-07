@@ -245,6 +245,35 @@ textarea {
     c.bgNow = el('div', { className: 'now' });
     c.bgLevel = slider('level', 0, 1, 0.01, (v) => `${Math.round(v * 100)}%`, (v) => send(sid, 'bgLevel', v));
 
+    // Dimensions (v0.5 add-ins): the time compass, the 4D fractal dive, the oscilloscope and the plane sources
+    const dim = (k, v) => send(sid, 'dim', { k, v });
+    c.theta = slider('time θ', -180, 180, 1, (v) => `${Math.round(v)}°`, (v) => dim('theta', v));
+    c.thetaSeg = seg([['0', 'Forward'], ['90', 'Imaginary'], ['180', 'Backward']], (v) => dim('theta', +v));
+    c.phi = slider('slice', 0, 90, 0.5, (v) => `${v}°`, (v) => dim('phi', v));
+    c.dive = slider('dive', 0, 2, 0.05, (v) => (v ? v.toFixed(2) : 'hold'), (v) => dim('dive', v));
+    c.cSel = el('select', {});
+    c.cSel.setAttribute('aria-label', 'Julia c');
+    c.cSel.addEventListener('change', () => dim('c', c.cSel.value));
+    c.oSel = el('select', {});
+    c.oSel.setAttribute('aria-label', 'Oscilloscope system');
+    c.oSel.addEventListener('change', () => dim('osys', +c.oSel.value));
+    c.dimNow = el('div', { className: 'now' });
+    c.srcSels = BLOCKS.slice(1).map(([key, label], i) => {
+      const s = el('select', {});
+      s.setAttribute('aria-label', `${label} plane source`);
+      s.addEventListener('change', () => dim('src', [i, +s.value]));
+      return { s, label };
+    });
+    c.dimRow = el('div', { className: 'row' }, el('span', { textContent: 'Dimensions' }), el('div', { className: 'stack' },
+      c.theta.wrap, c.thetaSeg,
+      el('div', { className: 'line' }, c.cSel, btn('New dive', () => dim('newDive')), c.oSel, btn('New start', () => dim('kick'))),
+      c.phi.wrap, c.dive.wrap, c.dimNow,
+      ...c.srcSels.map(({ s, label }) => {
+        const row = el('label', { className: 'slider' }, el('span', { textContent: label }), s);
+        row.style.gridTemplateColumns = '90px minmax(0, 1fr)';
+        return row;
+      })));
+
     const rows = el('div', { className: 'rows' },
       el('div', { className: 'row' }, el('span', { textContent: 'Scene' }), el('div', { className: 'stack' },
         el('div', { className: 'line' }, c.scene, btn('Next scene', () => send(sid, 'nextScene')), btn('New MilkDrop', () => send(sid, 'presets'))),
@@ -259,6 +288,7 @@ textarea {
         el('div', { className: 'line' }, btn('Next clip', () => send(sid, 'bgNext')),
           fileButton('Add videos', 'video/*,.mp4,.mov,.m4v,.webm', (files) => send(sid, 'addBgFiles', files))),
         c.bgLevel.wrap)),
+      c.dimRow,
       el('div', { className: 'row' }, el('span', { textContent: 'Inputs' }), el('div', { className: 'line' },
         btn('Camera on/off', () => send(sid, w.s.video === 'camera' ? 'videoOff' : 'camera')),
         btn('Connect MIDI', () => send(sid, 'midi')))));
@@ -297,6 +327,25 @@ textarea {
       if (document.activeElement !== sl.input) sl.out.textContent = sl.fmt(+v);
     }
     for (const b of c.bgSeg.children) b.setAttribute('aria-checked', String(b.dataset.value === s.bg.mode));
+    const d = s.dim;
+    c.dimRow.hidden = !d;
+    if (d) {
+      const fill = (sel, opts) => { if (sel.options.length !== opts.length) sel.replaceChildren(...opts.map(([v, t]) => el('option', { value: String(v), textContent: t }))); };
+      fill(c.cSel, d.cs.map((n) => [n, `c: ${n}`]));
+      fill(c.oSel, d.systems.map((n, k) => [k, n]));
+      if (document.activeElement !== c.cSel) c.cSel.value = d.c;
+      if (document.activeElement !== c.oSel) c.oSel.value = String(d.osys);
+      for (const [sl, v] of [[c.theta, d.theta], [c.phi, d.phi], [c.dive, d.dive]]) {
+        setIfIdle(sl.input, v);
+        if (document.activeElement !== sl.input) sl.out.textContent = sl.fmt(+v);
+      }
+      for (const b of c.thetaSeg.children) b.setAttribute('aria-checked', String(+b.dataset.value === d.theta));
+      c.srcSels.forEach(({ s: sel }, i) => {
+        fill(sel, d.sources);
+        if (document.activeElement !== sel) sel.value = String(d.src[i] || 0);
+      });
+      c.dimNow.textContent = `4D dive at zoom 2^${d.depth} (about 10^${(d.depth * Math.log10(2)).toFixed(1)})${d.steering ? ' · the Camera block is steering time' : ''}`;
+    }
     link(c.bgNow, s.bg.now ? `▸ ${s.bg.now}` : (s.bg.mode === 'shader' ? 'the nebula shader' : s.bg.mode === 'off' ? 'black' : 'loading…'), s.bg.link);
     w.el.classList.toggle('selected', selected === s.sid);
     w.el.classList.toggle('stale', !!w.stale);
