@@ -1573,11 +1573,11 @@ function skipTrack() {
 function onTrackStart(lane, tr) {
   engine.lastStarted = tr;
   engine.newtrack = 1;
-  // a new track brings a new MilkDrop preset on one plane
+  // a new track brings a new MilkDrop preset on one plane, if that plane has shown its preset
+  // for at least 20 seconds, so changes never come closer together than the 30 ± 10 s rhythm
   if (!reducedMotion) {
-    const md = milkdrops[cycleNext++ % milkdrops.length];
-    if (md && md.ok) { loadPreset(md, pickPreset(milkdrops.map((m) => m.name)), 4); syncMilkdropPlanes(); }
-    cycleTimer = 0;
+    const ready = milkdrops.filter((m) => m.ok && presetShownFor(m) >= PRESET_EVERY - PRESET_JITTER);
+    if (ready.length) changePreset(ready[cycleNext++ % ready.length], 4);
   }
   try {
     if ('mediaSession' in navigator && window.MediaMetadata) {
@@ -1842,19 +1842,29 @@ function syncMilkdropPlanes() {
   $('presetA').textContent = `A · ${mdA.ok ? mdA.name : 'built-in shader'}`;
   $('presetB').textContent = `B · ${mdB.ok ? mdB.name : 'built-in shader'}`;
 }
-function newPresets(blend) {
-  for (const md of milkdrops) if (md.ok) loadPreset(md, pickPreset(milkdrops.map((m) => m.name)), blend);
+// Each MilkDrop plane changes preset on its own clock: every 30 seconds, give or take 10, at random.
+const PRESET_EVERY = 30, PRESET_JITTER = 10;
+const presetWait = () => PRESET_EVERY - PRESET_JITTER + Math.random() * 2 * PRESET_JITTER;
+function changePreset(md, blend) {
+  if (!md || !md.ok) return;
+  loadPreset(md, pickPreset(milkdrops.map((m) => m.name)), blend);
+  md.changedAt = performance.now();                       // wall clock, so the speed slider doesn't stretch it
+  md.due = md.changedAt + presetWait() * 1000;
   syncMilkdropPlanes();
-  cycleTimer = 0;
 }
-let cycleTimer = 0, cycleNext = 0;
-function autoCycle(dt) {
+const presetShownFor = (md) => (md.changedAt === undefined ? Infinity : (performance.now() - md.changedAt) / 1000);
+function newPresets(blend) {
+  for (const md of milkdrops) changePreset(md, blend);
+}
+let cycleNext = 0;
+function autoCycle() {
   if (reducedMotion) return;
-  cycleTimer += dt;
-  if (cycleTimer < 26) return;
-  cycleTimer = 0;
-  const md = milkdrops[cycleNext++ % milkdrops.length];
-  if (md && md.ok) { loadPreset(md, pickPreset(milkdrops.map((m) => m.name)), 3); syncMilkdropPlanes(); }
+  const now = performance.now();
+  for (const md of milkdrops) {
+    if (!md.ok) continue;
+    if (md.due === undefined) { md.changedAt = now; md.due = now + presetWait() * 1000; }
+    else if (now >= md.due) changePreset(md, 3);
+  }
 }
 
 const mdA = initMilkdrop('mdA', 1);

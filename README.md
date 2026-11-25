@@ -37,7 +37,7 @@ How it keeps going:
 - **Background.** The audio runs on its own clock, so it keeps going in a background tab. On a phone the page keeps the screen awake while sound is playing, and lock-screen controls can pause or skip.
 - **Starting.** Browsers hold sound back until the first tap or key press. If that happens, a **Start audio** button appears, and the first track has already loaded by then. On a dedicated broadcast machine, start Chrome with `--autoplay-policy=no-user-gesture-required` so it starts by itself.
 
-Each new track also brings a new MilkDrop preset on one plane. The equations can follow the music through `track`, `trackpos`, `newtrack` and `lanes`.
+Each MilkDrop plane changes preset by itself every 30 seconds, give or take 10 at random, on its own clock, so the two planes rarely change together. A new track can bring a change early on a plane that has shown its preset for at least 20 seconds, so changes never come closer than that. **N** changes both at once and restarts their clocks. The equations can follow the music through `track`, `trackpos`, `newtrack` and `lanes`.
 
 ## Solids
 
