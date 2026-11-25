@@ -39,6 +39,14 @@ How it keeps going:
 
 Each MilkDrop plane changes preset by itself every 30 seconds, give or take 10 at random, on its own clock, so the two planes rarely change together. A new track can bring a change early on a plane that has shown its preset for at least 20 seconds, so changes never come closer than that. **N** changes both at once and restarts their clocks. The equations can follow the music through `track`, `trackpos`, `newtrack` and `lanes`.
 
+## Auto scenes
+
+The page changes scene by itself every minute, give or take 20 seconds at random, always to a different scene. Every scene change, automatic or by hand, glides over 3½ seconds: the camera, the solids, their shapes, the trails and the background ease from where they were into the new scene instead of jumping.
+
+Turn it on or off with the **Auto scenes** button, the **A** key, or the **Auto scenes** switch on that window's card in the control panel, which also shows how long until the next change. Each window remembers its own setting. Picking a scene by hand starts a fresh interval.
+
+On top of that, each MilkDrop plane changes preset every 30 seconds, give or take 10.
+
 ## Solids
 
 Every screen is one mesh that morphs between three forms, with the picture wrapped on every face:
@@ -180,7 +188,7 @@ It uses its own browser profile, so your everyday Chrome is untouched. macOS ope
 
 The page remembers the audio source, camera and MIDI, so after a reload (or an 11:45 cycle restart) it reconnects everything the browser has already allowed.
 
-Keys: **H** controls · **F** fullscreen · **C** control panel · **S** next scene · **N** new MilkDrop presets · **K** skip track · **B** next background clip · **E** equations · **D** dimensions · **Ctrl/⌘ + Enter** apply an edit.
+Keys: **H** controls · **F** fullscreen · **C** control panel · **S** next scene · **A** auto scenes on/off · **N** new MilkDrop presets · **K** skip track · **B** next background clip · **E** equations · **D** dimensions · **Ctrl/⌘ + Enter** apply an edit.
 
 ## The equation language
 

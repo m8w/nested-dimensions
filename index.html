@@ -178,7 +178,7 @@ input[type="text"]::placeholder { color: var(--dim); opacity: 0.8; }
 
 <header class="mast" id="mast">
   <div class="plate ident">
-    <div class="wordmark">nested dimensions<small id="verTag">v0.5</small></div>
+    <div class="wordmark">nested dimensions<small id="verTag">v0.6</small></div>
     <div class="readout"><b id="sceneLabel">orbit</b> · <span id="fpsLabel">-- fps</span> · <span id="audioLabel">no audio</span></div>
     <div class="now" id="nowLine" hidden><b>♪</b><span id="nowTitle"></span></div>
     <div class="presets">
@@ -300,6 +300,7 @@ input[type="text"]::placeholder { color: var(--dim); opacity: 0.8; }
   <div class="keys" role="toolbar" aria-label="Main controls">
     <button class="key primary" id="btnStart" type="button" hidden>Start audio</button>
     <button class="key" id="btnScene" type="button">Scene: orbit</button>
+    <button class="key" id="btnAuto" type="button" aria-pressed="true" title="Change scene by itself every minute or so (A)">Auto scenes</button>
     <button class="key" id="btnPresets" type="button">New MilkDrop</button>
     <button class="key" id="btnSources" type="button" aria-pressed="false">Sources</button>
     <button class="key" id="btnSkip" type="button" hidden>Skip track</button>
@@ -1885,6 +1886,7 @@ function setBlock(key, src) {
   state.broken[key] = false;
 }
 function loadScene(sc) {
+  if (state.sceneName) startGlide();     // glide from the last frame into the new scene
   state.sceneName = sc.name;
   state.base = { camera: sc.camera, ...sc.planes };
   const edits = savedEdits[sc.name] || {};
@@ -1895,8 +1897,9 @@ function loadScene(sc) {
     state.vars[b.key] = Object.create(null);
   }
   $('btnScene').textContent = `Scene: ${sc.name}`;
-  $('sceneLabel').textContent = sc.name;
+  refreshSceneLabel();
   refreshEditor();
+  scheduleAuto();                        // any scene change, by hand or automatic, starts a fresh interval
 }
 function nextScene() {
   state.sceneIndex = (Math.max(state.sceneIndex, -1) + 1) % SCENES.length;
@@ -1952,6 +1955,86 @@ function applyLook(plane, v) {
   u.uSize.value.set(0.9 * plane.srcAspect, 0.9);
   plane.mesh.visible = a > 0.002;
 }
+/* Scene glide: when the scene changes, everything eases from where it was into the new scene over a few
+   seconds (camera, solids, trails, background), instead of jumping. */
+const GLIDE_MS = 3500;
+const glide = { t0: 0, cam: null, planes: null, trail: null, bg: null };
+function startGlide() {
+  glide.t0 = performance.now();
+  glide.cam = { pos: camera.position.clone(), q: camera.quaternion.clone(), fov: camera.fov };
+  glide.trail = { zoom: trailMat.uniforms.uZoom.value, rot: trailMat.uniforms.uRot.value, decay: trailMat.uniforms.uDecay.value };
+  glide.bg = { ...bgLook };
+  glide.planes = {};
+  for (const key of PLANE_KEYS) {
+    const p = planes[key], u = p.mat.uniforms;
+    glide.planes[key] = {
+      pos: p.mesh.position.clone(), q: p.mesh.quaternion.clone(), scale: p.mesh.scale.clone(),
+      depth: u.uDepth.value, round: u.uRound.value, relief: u.uRelief.value, alpha: p.mesh.visible ? u.uAlpha.value : 0, bright: u.uBright.value,
+    };
+  }
+}
+const lerp = (a, b, k) => a + (b - a) * k;
+function applyGlide() {
+  if (!glide.t0) return;
+  const x = (performance.now() - glide.t0) / GLIDE_MS;
+  if (x >= 1) { glide.t0 = 0; return; }
+  const k = x * x * (3 - 2 * x);         // smoothstep
+  const g = glide.cam;
+  camera.position.lerpVectors(g.pos, camera.position.clone(), k);
+  camera.quaternion.slerpQuaternions(g.q, camera.quaternion.clone(), k);
+  const fov = lerp(g.fov, camera.fov, k);
+  if (fov !== camera.fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
+  const tu = trailMat.uniforms, gt = glide.trail;
+  tu.uZoom.value = lerp(gt.zoom, tu.uZoom.value, k);
+  tu.uRot.value = lerp(gt.rot, tu.uRot.value, k);
+  tu.uDecay.value = lerp(gt.decay, tu.uDecay.value, k);
+  trail.visible = tu.uDecay.value > 0.001;
+  for (const f of ['level', 'zoom', 'rot', 'x', 'y']) bgLook[f] = lerp(glide.bg[f], bgLook[f], k);
+  for (const key of PLANE_KEYS) {
+    const p = planes[key], s0 = glide.planes[key], u = p.mat.uniforms, m = p.mesh;
+    m.position.lerpVectors(s0.pos, m.position.clone(), k);
+    m.quaternion.slerpQuaternions(s0.q, m.quaternion.clone(), k);
+    m.scale.lerpVectors(s0.scale, m.scale.clone(), k);
+    u.uDepth.value = lerp(s0.depth, u.uDepth.value, k);
+    u.uRound.value = lerp(s0.round, u.uRound.value, k);
+    u.uRelief.value = lerp(s0.relief, u.uRelief.value, k);
+    u.uBright.value = lerp(s0.bright, u.uBright.value, k);
+    const a = lerp(s0.alpha, m.visible ? u.uAlpha.value : 0, k);
+    u.uAlpha.value = a;
+    m.visible = a > 0.002;
+  }
+}
+
+/* Auto scenes: a new scene every minute, give or take 20 seconds, at random. */
+const AUTO_EVERY = 60, AUTO_JITTER = 20;
+const auto = { on: prefs.autoScene !== false, due: 0 };
+const autoWait = () => (AUTO_EVERY - AUTO_JITTER + Math.random() * 2 * AUTO_JITTER) * 1000;
+function scheduleAuto() { auto.due = performance.now() + autoWait(); }
+function randomScene() {
+  const others = SCENES.map((_, k) => k).filter((k) => k !== state.sceneIndex);
+  const k = others[Math.floor(Math.random() * others.length)];
+  state.sceneIndex = k - 1;
+  nextScene();
+}
+function autoTick() {
+  if (!auto.on) return;
+  if (!auto.due) scheduleAuto();
+  if (performance.now() >= auto.due) randomScene();
+}
+function setAuto(on) {
+  auto.on = !!on;
+  prefs.autoScene = auto.on;
+  savePrefs();
+  scheduleAuto();
+  refreshSceneLabel();
+}
+function refreshSceneLabel() {
+  $('sceneLabel').textContent = state.sceneName + (auto.on ? ' · auto' : '');
+  const b = $('btnAuto');
+  b.setAttribute('aria-pressed', String(auto.on));
+  b.textContent = auto.on ? 'Auto scenes: on' : 'Auto scenes: off';
+}
+
 function evaluate() {
   for (const k in extra) delete extra[k];
   const fitDefault = Math.pow(Math.max(1, 1.3 / aspect), 0.55);
@@ -1994,6 +2077,7 @@ function evaluate() {
     const src = planes[key].src;
     if (mesh.visible && src >= 1 && src <= 8) usedSources.add(src);   // only pictures someone can see get drawn
   });
+  applyGlide();
 }
 
 /* ------------------------------------------------------------------ video on the Stream plane */
@@ -2537,6 +2621,7 @@ if (coarse || !('webkitdirectory' in document.createElement('input'))) $('folder
 
 $('btnStart').addEventListener('click', unlockAudio);
 $('btnScene').addEventListener('click', nextScene);
+$('btnAuto').addEventListener('click', () => setAuto(!auto.on));
 $('btnPresets').addEventListener('click', () => {
   if (!milkdrops.some((md) => md.ok)) { toast('MilkDrop isn’t running in this view, so there are no presets to change.'); return; }
   newPresets(1.5);
@@ -2696,6 +2781,7 @@ window.addEventListener('keydown', (e) => {
   if (k === 'h') setBare(!bare);
   else if (k === 'n') newPresets(1.5);
   else if (k === 's') nextScene();
+  else if (k === 'a') setAuto(!auto.on);
   else if (k === 'k') skipTrack();
   else if (k === 'b') { bg.skip = true; bg.idleUntil = 0; bgTick(); }
   else if (k === 'e') { if (bare) setBare(false); toggleSheet('eqSheet'); }
@@ -2771,6 +2857,7 @@ function frame(now) {
 
   hud(dt);
   autoCycle(dt);
+  autoTick();
 }
 
 // The audio engine runs on its own clock, so it keeps going when the tab is in the background.
@@ -2800,7 +2887,7 @@ bootSources();
    can be edited from the panel, even one sitting fullscreen in its own Space. */
 const SID = Math.random().toString(36).slice(2, 10);
 let remote = null;
-if (WID !== '1') $('verTag').textContent = `v0.5 · window ${WID}`;
+if (WID !== '1') $('verTag').textContent = `v0.6 · window ${WID}`;
 function remoteStatus() {
   const t = engine.lastStarted && engine.lastStarted.lane.cur === engine.lastStarted ? engine.lastStarted : null;
   const clip = bg.fading && bg.b ? bg.b : bg.a;
@@ -2815,6 +2902,7 @@ function remoteStatus() {
     bg: { mode: bg.mode, level: bg.level, now: clip ? clip.info.title : '', link: clip ? clip.info.link : '', files: bg.files.length },
     video: video.active ? (video.stream ? 'camera' : 'file') : 'fractal',
     dim: ADD ? ADD.status() : null,
+    auto: auto.on, autoIn: auto.on && auto.due ? Math.max(0, Math.round((auto.due - performance.now()) / 1000)) : null,
   };
 }
 function remoteSend(msg) { try { if (remote) remote.postMessage(msg); } catch (e) { /* channel closed */ } }
@@ -2835,6 +2923,7 @@ function remoteSetBlock(key, src) {
 const REMOTE = {
   scene: (name) => { const k = SCENES.findIndex((x) => x.name === name); if (k >= 0) { state.sceneIndex = k - 1; nextScene(); } },
   nextScene: () => nextScene(),
+  auto: (on) => setAuto(on),
   presets: () => newPresets(1.5),
   audioMode: (m) => setMode(m, false),
   volume: (v) => setRange('vol', v),
@@ -2925,7 +3014,7 @@ import('./addins.js?v=5').then((m) => {
 window.nestedDimensions = {
   EQ, state, planes, milkdrops, engine, audio, setMode, skipTrack, setPaused, bg, setBgMode, blitUniforms: blitMat.uniforms,
   get fps() { return fps; }, get frames() { return frames; }, get addins() { return ADD; },
-  get clock() { return { re: simTime, im: imTime }; }, renderer, rtRead: () => rtRead,
+  get clock() { return { re: simTime, im: imTime }; }, renderer, rtRead: () => rtRead, auto, setAuto, autoWait,
 };
 window.__ndReady = true;
 clearTimeout(window.__ndBoot);

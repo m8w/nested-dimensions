@@ -233,6 +233,7 @@ textarea {
     c.scene.setAttribute('aria-label', 'Scene');
     c.scene.addEventListener('change', () => send(sid, 'scene', c.scene.value));
     c.presets = el('div', { className: 'now' });
+    c.auto = btn('Auto scenes', () => send(sid, 'auto', !w.s.auto));
     c.speed = slider('speed', 0, 2, 0.05, (v) => v.toFixed(2), (v) => send(sid, 'speed', v));
 
     c.audioSeg = seg(AUDIO, (m) => send(sid, m === 'live' ? 'live' : 'audioMode', m));
@@ -277,6 +278,7 @@ textarea {
     const rows = el('div', { className: 'rows' },
       el('div', { className: 'row' }, el('span', { textContent: 'Scene' }), el('div', { className: 'stack' },
         el('div', { className: 'line' }, c.scene, btn('Next scene', () => send(sid, 'nextScene')), btn('New MilkDrop', () => send(sid, 'presets'))),
+        el('div', { className: 'line' }, c.auto),
         c.presets, c.speed.wrap)),
       el('div', { className: 'row' }, el('span', { textContent: 'Audio' }), el('div', { className: 'stack' },
         c.audioSeg, c.audioNow,
@@ -319,6 +321,12 @@ textarea {
     if (c.scene.options.length !== s.scenes.length) c.scene.replaceChildren(...s.scenes.map((n) => el('option', { value: n, textContent: n })));
     if (document.activeElement !== c.scene) c.scene.value = s.scenes.includes(s.scene) ? s.scene : '';
     c.presets.textContent = `MilkDrop A · ${s.presets[0] || '—'}  ·  B · ${s.presets[1] || '—'}`;
+    if (s.auto === undefined) c.auto.hidden = true;   // a window still on an older version
+    else {
+      c.auto.hidden = false;
+      c.auto.setAttribute('aria-pressed', String(!!s.auto));
+      c.auto.textContent = s.auto ? `Auto scenes: on · next in ${s.autoIn ?? '…'} s` : 'Auto scenes: off';
+    }
     for (const b of c.audioSeg.children) b.setAttribute('aria-checked', String(b.dataset.value === s.audio.mode));
     link(c.audioNow, s.audio.now ? `♪ ${s.audio.now}` : s.audio.label, s.audio.link);
     c.pause.textContent = s.audio.paused ? 'Play' : 'Pause';
