@@ -178,7 +178,7 @@ input[type="text"]::placeholder { color: var(--dim); opacity: 0.8; }
 
 <header class="mast" id="mast">
   <div class="plate ident">
-    <div class="wordmark">nested dimensions<small id="verTag">v0.7</small></div>
+    <div class="wordmark">nested dimensions<small id="verTag">v0.8</small></div>
     <div class="readout"><b id="sceneLabel">orbit</b> · <span id="fpsLabel">-- fps</span> · <span id="audioLabel">no audio</span></div>
     <div class="now" id="nowLine" hidden><b>♪</b><span id="nowTitle"></span></div>
     <div class="presets">
@@ -1072,6 +1072,31 @@ function routePlane(p, id) {
     p.srcAspect = clamp(p.own.aspect, 0.6, 2.4);
   }
 }
+// A plane that changes pictures (a scene, a menu or Auto dimensions) dips out, swaps and fades back in,
+// instead of cutting. Returns how visible the plane is right now (0 to 1).
+const SWAP_MS = 450;
+function routeSoft(p, id) {
+  const want = pickSource(id) ? id : 0;
+  const now = performance.now();
+  if (!p.swap) {
+    if (want === p.src) { routePlane(p, want); return 1; }
+    if (frames < 3 || !p.mesh.visible) { routePlane(p, want); return 1; }
+    p.swap = { to: want, t0: now };
+  }
+  const s = p.swap;
+  let x = (now - s.t0) / SWAP_MS;
+  if (x >= 1 && want !== s.to) {
+    // asked for something else while fading back in: fade out again from where it is
+    s.to = want;
+    s.t0 = now - Math.max(0, 2 - x) * SWAP_MS;
+    x = (now - s.t0) / SWAP_MS;
+  }
+  if (x < 1) { s.to = want; routePlane(p, p.src); const y = 1 - x; return y * y * (3 - 2 * y); }
+  routePlane(p, s.to);
+  if (x >= 2) { p.swap = null; return 1; }
+  const y = x - 1;
+  return y * y * (3 - 2 * y);
+}
 setScreen('stream', procStream.tex, 16 / 9);
 
 const blitScene = new THREE.Scene();
@@ -1942,9 +1967,9 @@ function fillInputs(t, dt, fps, frameCount) {
   inputs.tim = imTime;
   if (ADD) ADD.fillInputs(inputs);
 }
-function applyLook(plane, v) {
+function applyLook(plane, v, shown = 1) {
   const m = plane.mat, u = m.uniforms;
-  const a = clamp(num(v.a, 1), 0, 1), additive = num(v.add, 0) > 0.5;
+  const a = clamp(num(v.a, 1), 0, 1) * shown, additive = num(v.add, 0) > 0.5;
   const blending = additive ? THREE.AdditiveBlending : THREE.NormalBlending;
   if (m.blending !== blending) m.blending = blending;
   const writeDepth = a > 0.99 && !additive && plane.key !== 'nest';   // solid and opaque: hide what is behind it
@@ -2069,13 +2094,13 @@ function evaluate() {
   PLANE_KEYS.forEach((key, i) => {
     extra.i = i;
     const v = runBlock(key, { ...PLANE_DEFAULTS, src: ADD ? ADD.planeSrc(i) : 0 });
-    routePlane(planes[key], clamp(Math.round(num(v.src, 0)), 0, 12));
+    const shown = routeSoft(planes[key], clamp(Math.round(num(v.src, 0)), 0, 12));
     const mesh = planes[key].mesh;
     mesh.position.set(num(v.x, 0), num(v.y, 0), num(v.z, 0));
     mesh.rotation.set(num(v.rx, 0), num(v.ry, 0), num(v.rz, 0));
     const sx = num(v.sx, 1) || 1e-4, sy = num(v.sy, 1) || 1e-4, sz = num(v.sz, 0);
     mesh.scale.set(sx, sy, sz > 0 ? sz : Math.sqrt(Math.abs(sx * sy)));
-    applyLook(planes[key], v);
+    applyLook(planes[key], v, shown);
     const src = planes[key].src;
     if (mesh.visible && src >= 1 && src <= 8) usedSources.add(src);   // only pictures someone can see get drawn
   });
@@ -2927,6 +2952,7 @@ window.addEventListener('keydown', (e) => {
   else if (k === 'n') newPresets(1.5);
   else if (k === 's') nextScene();
   else if (k === 'a') setAuto(!auto.on);
+  else if (k === 'm' && ADD) { ADD.set('auto', !ADD.autoOn); toast(ADD.autoOn ? 'Auto dimensions: on' : 'Auto dimensions: off'); }
   else if (k === 'k') skipTrack();
   else if (k === 'b') { bg.skip = true; bg.idleUntil = 0; bgTick(); }
   else if (k === 'e') { if (bare) setBare(false); toggleSheet('eqSheet'); }
@@ -3034,7 +3060,7 @@ if (prefs.bare ?? FROM_PANEL) setBare(true, true);   // controls stay hidden in 
    can be edited from the panel, even one sitting fullscreen in its own Space. */
 const SID = Math.random().toString(36).slice(2, 10);
 let remote = null;
-if (WID !== '1') $('verTag').textContent = `v0.7 · window ${WID}`;
+if (WID !== '1') $('verTag').textContent = `v0.8 · window ${WID}`;
 function remoteStatus() {
   const t = engine.lastStarted && engine.lastStarted.lane.cur === engine.lastStarted ? engine.lastStarted : null;
   const clip = bg.fading && bg.b ? bg.b : bg.a;
@@ -3146,11 +3172,11 @@ function addinFailed(e) {
   if (!$('dimSheet').hidden) toggleSheet('dimSheet');
   toast(`The Dimensions add-ins stopped (${e && e.message ? e.message : e}). Everything else keeps running.`, 8000);
 }
-import('./addins.js?v=5').then((m) => {
+import('./addins.js?v=6').then((m) => {
   ADD = m.install({
     THREE, renderer, coarse, $, toast, NS, FULL_GEO, FULL_VS, blitCam,
     PLANES: PLANE_KEYS.map((key) => ({ key, label: labelOf(key) })),
-    BUILTIN: BUILTIN_SOURCES.map(({ id, name }) => ({ id, name })),
+    BUILTIN: BUILTIN_SOURCES.map(({ id, name, key }) => ({ id, name, key })),
   });
   $('btnDim').hidden = false;
 }).catch((e) => {

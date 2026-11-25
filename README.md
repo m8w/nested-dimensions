@@ -14,6 +14,7 @@ By xik6 (William Victor Newbold).
 - **Nonstop audio (v0.2).** Archive radio plays the xik6 catalog from archive.org at random, crossfaded, on up to four lanes at once. It also plays your own files, shuffled, or follows a live input that reconnects by itself.
 - **Control panel and multiple windows (v0.4).** Run several visuals windows at once, each with its own scene, audio and background, and edit any of them from one control panel, even one that's fullscreen.
 - **Dimensions (v0.5).** Complex time turns every equation's clock forward, backward or into imaginary time. Four new pictures can go on any plane: a deep dive through the 4D Julia–Mandelbrot object, the Lorenz system in complex time, a complex flow field, and an oscilloscope of four complex variables w, x, y, z.
+- **Auto dimensions (v0.8).** Every operator in Dimensions changes by itself, each on its own timer: the time compass glides between its four directions, each plane mixes in new pictures from its menu, and the fractal, flow field and oscilloscope pick new settings.
 - **Mac launcher (v0.3).** Double-click to open it in its own browser, with sound that starts by itself and windows that reopen if they close.
 - **Equations.** The camera and each plane run a small MilkDrop-flavoured program every frame that sets position, rotation, scale, opacity and glow from time, audio, tracks and MIDI. Edit them live in the page.
 - **Trails.** MilkDrop-style feedback behind everything: each frame zooms, turns and fades the last one.
@@ -88,6 +89,21 @@ The panel and the windows talk over a BroadcastChannel, so they need to be in th
 ## Dimensions
 
 Open **Dimensions** (or press **D**). These add-ins live in `addins.js`; if it can't load, everything else runs as before.
+
+### Auto dimensions
+
+Every operator below changes by itself, each on its own timer, about every 30 seconds give or take 10 (set it with **every**, from 10 s to 2 min; it always varies by a third either way). Each window does this on its own, so no two windows move together.
+
+| operator | what changes |
+|---|---|
+| Time compass | glides over 6 s to one of its four directions (forward 0°, imaginary 90°, backward 180°, −90°) or to an angle between them. Real time stands still at ±90°, so it doesn't stay there long. |
+| Plane sources | each of the four planes, on its own timer, picks from its menu: its own picture, one of the other layers (MilkDrop A, Stream, MilkDrop B, Nested) or an add-in picture. Its own picture comes up most often, and at most two planes show add-in pictures at once, which keeps the frame rate up. The plane fades out, changes and fades back in. |
+| 4D fractal dive | morphs to another Julia c, and glides the slice, twist and dive speed |
+| Lorenz window | glides to a new window |
+| Flow field | switches to another of its four equations |
+| Oscilloscope | switches system and glides the rate |
+
+Turn it all on or off with **Auto dimensions** (or the **M** key), and switch single operators on or off with their buttons. Changing an operator by hand holds that one operator for a full interval before it moves on by itself. A scene that sets `src` or `theta` in its equations keeps its own choice, as before. Every window remembers its settings, and the control panel has the same switches on each window's card, with the next change and when it comes.
 
 ### Time compass
 
@@ -188,7 +204,7 @@ It uses its own browser profile, so your everyday Chrome is untouched. macOS ope
 
 The page remembers the audio source, camera and MIDI, so after a reload (or an 11:45 cycle restart) it reconnects everything the browser has already allowed.
 
-Keys: **H** controls · **F** fullscreen · **C** control panel · **S** next scene · **A** auto scenes on/off · **N** new MilkDrop presets · **K** skip track · **B** next background clip · **E** equations · **D** dimensions · **Ctrl/⌘ + Enter** apply an edit.
+Keys: **H** controls · **F** fullscreen · **C** control panel · **S** next scene · **A** auto scenes on/off · **M** auto dimensions on/off · **N** new MilkDrop presets · **K** skip track · **B** next background clip · **E** equations · **D** dimensions · **Ctrl/⌘ + Enter** apply an edit.
 
 ## The equation language
 

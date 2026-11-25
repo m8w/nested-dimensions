@@ -253,7 +253,12 @@ textarea {
     // Dimensions (v0.5 add-ins): the time compass, the 4D fractal dive, the oscilloscope and the plane sources
     const dim = (k, v) => send(sid, 'dim', { k, v });
     c.theta = slider('time θ', -180, 180, 1, (v) => `${Math.round(v)}°`, (v) => dim('theta', v));
-    c.thetaSeg = seg([['0', 'Forward'], ['90', 'Imaginary'], ['180', 'Backward']], (v) => dim('theta', +v));
+    c.thetaSeg = seg([['0', 'Forward'], ['90', 'Imaginary'], ['180', 'Backward'], ['-90', '−90°']], (v) => dim('theta', +v));
+    // Auto dimensions (v0.8): every operator in the Dimensions sheet changes by itself, each on its own timer
+    c.dimAuto = btn('Auto dimensions', () => dim('auto', !(w.s.dim && w.s.dim.auto)));
+    c.pace = slider('every ±⅓', 10, 120, 5, (v) => `${Math.round(v)} s`, (v) => dim('pace', v));
+    c.groups = el('div', { className: 'line' });
+    c.btn = btn; c.dim = dim;   // the operator buttons are made once the window says which there are
     c.phi = slider('slice', 0, 90, 0.5, (v) => `${v}°`, (v) => dim('phi', v));
     c.dive = slider('dive', 0, 2, 0.05, (v) => (v ? v.toFixed(2) : 'hold'), (v) => dim('dive', v));
     c.cSel = el('select', {});
@@ -270,6 +275,7 @@ textarea {
       return { s, label };
     });
     c.dimRow = el('div', { className: 'row' }, el('span', { textContent: 'Dimensions' }), el('div', { className: 'stack' },
+      el('div', { className: 'line' }, c.dimAuto), c.pace.wrap, c.groups,
       c.theta.wrap, c.thetaSeg,
       el('div', { className: 'line' }, c.cSel, btn('New dive', () => dim('newDive')), c.oSel, btn('New start', () => dim('kick'))),
       c.phi.wrap, c.dive.wrap, c.dimNow,
@@ -356,6 +362,22 @@ textarea {
         fill(sel, d.sources);
         if (document.activeElement !== sel) sel.value = String(d.src[i] || 0);
       });
+      if (d.auto === undefined) { c.dimAuto.hidden = c.pace.wrap.hidden = c.groups.hidden = true; }   // a window still on an older version
+      else {
+        c.dimAuto.hidden = c.pace.wrap.hidden = c.groups.hidden = false;
+        c.dimAuto.setAttribute('aria-pressed', String(!!d.auto));
+        c.dimAuto.textContent = !d.auto ? 'Auto dimensions: off' : d.autoNext ? `Auto dimensions: on · next ${d.autoNext.label} in ${d.autoNext.inS} s` : 'Auto dimensions: on';
+        setIfIdle(c.pace.input, d.pace);
+        if (document.activeElement !== c.pace.input) c.pace.out.textContent = c.pace.fmt(+d.pace);
+        if (c.groups.children.length !== d.autoGroups.length) {
+          c.groups.replaceChildren(...d.autoGroups.map(([g, label]) => {
+            const b = c.btn(label, () => c.dim('autoGroup', [g, b.getAttribute('aria-pressed') !== 'true']));
+            b.dataset.group = g;
+            return b;
+          }));
+        }
+        for (const b of c.groups.children) b.setAttribute('aria-pressed', String(!d.autoOff.includes(b.dataset.group)));
+      }
       c.dimNow.textContent = `4D dive at zoom 2^${d.depth} (about 10^${(d.depth * Math.log10(2)).toFixed(1)})${d.steering ? ' · the Camera block is steering time' : ''}`;
     }
     link(c.bgNow, s.bg.now ? `▸ ${s.bg.now}` : (s.bg.mode === 'shader' ? 'the nebula shader' : s.bg.mode === 'off' ? 'black' : 'loading…'), s.bg.link);

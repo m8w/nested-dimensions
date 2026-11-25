@@ -20,6 +20,7 @@
    - Oscilloscope (src 4, and 5-8 for w, x, y, z alone). Four complex variables, each drawn in its
      own complex plane: Hénon–Heiles in complex time, the complex Lorenz equations, or a ring of
      four coupled oscillators. Their values are also equation inputs (owr, owi … ozr, ozi).
+   - Auto dimensions (v0.8). Every operator above changes by itself, each on its own timer.
    --------------------------------------------------------------------------------------------- */
 
 const TAU = Math.PI * 2;
@@ -202,11 +203,21 @@ export function install(ctx) {
 
   /* ---------------------------------------------------------------- settings */
   const PREF_KEY = 'nd.dims.v1' + NS;
-  const DEF = { theta: 0, src: [0, 0, 0, 0], phi: 90, dive: 0.25, twist: 0.6, c: 'Spiral', span: 1.1, fsel: 1, osys: 0, orate: 1 };
+  const stillPlease = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const DEF = {
+    theta: 0, src: [0, 0, 0, 0], phi: 90, dive: 0.25, twist: 0.6, c: 'Spiral', span: 1.1, fsel: 1, osys: 0, orate: 1,
+    auto: !stillPlease, pace: 30, autoOff: [],
+  };
   let ui = { ...DEF };
   try { ui = { ...DEF, ...(JSON.parse(localStorage.getItem(PREF_KEY) || '{}') || {}) }; } catch (e) { ui = { ...DEF }; }
   if (!Array.isArray(ui.src) || ui.src.length !== 4) ui.src = [0, 0, 0, 0];
-  const save = () => { try { localStorage.setItem(PREF_KEY, JSON.stringify(ui)); } catch (e) { /* storage off */ } };
+  if (!Array.isArray(ui.autoOff)) ui.autoOff = [];
+  ui.pace = clamp(Math.round(+ui.pace) || 30, 10, 120);
+  ui.auto = !!ui.auto;
+  const save = () => {
+    // theta can be past ±180° half way through a glide, so it is stored wrapped
+    try { localStorage.setItem(PREF_KEY, JSON.stringify({ ...ui, theta: ((ui.theta + 180) % 360 + 360) % 360 - 180 })); } catch (e) { /* storage off */ }
+  };
   const cPreset = (name) => C_PRESETS.find((p) => p[0] === name) || C_PRESETS[0];
 
   // what the camera block last asked for (its outputs default to the sheet's settings)
@@ -618,6 +629,7 @@ export function install(ctx) {
   let lastDt = 0;
   function step(simDt, clock) {
     // simDt: seconds of complex time this frame (speed included); clock: { re, im }
+    autoRun(performance.now());
     lastDt = simDt;
     tim = clock.im; timeNow = clock.re;
     jbStep(simDt, Math.cos(live.theta));   // forward time dives in, backward time zooms out
@@ -632,9 +644,9 @@ export function install(ctx) {
     inp.owr = o[0]; inp.owi = o[1]; inp.oxr = o[2]; inp.oxi = o[3]; inp.oyr = o[4]; inp.oyi = o[5]; inp.ozr = o[6]; inp.ozi = o[7];
   }
   function camDefaults() {
-    const c = cPreset(ui.c);
+    const c = cNow();
     return {
-      theta: ui.theta * DEG, jphi: ui.phi * DEG, jcr: c[1], jci: c[2], jdive: ui.dive, jtwist: ui.twist, jmax: 100,
+      theta: ui.theta * DEG, jphi: ui.phi * DEG, jcr: c[0], jci: c[1], jdive: ui.dive, jtwist: ui.twist, jmax: 100,
       lspan: ui.span, lflow: 0.15, fsel: ui.fsel, osys: ui.osys, orate: ui.orate,
     };
   }
@@ -655,6 +667,137 @@ export function install(ctx) {
     else for (const t of sc.trail) if (t.length > 2) t.splice(0, t.length - 2);
     renderer.setRenderTarget(null);
     if (sheetOpen()) refreshClock();
+  }
+
+  /* ---------------------------------------------------------------- auto dimensions (v0.8)
+     Every operator on this sheet changes by itself, each on its own timer: the pace, give or take a third
+     (30 s means anywhere from 20 to 40 s).
+     - Time compass: glides to one of its four directions (forward 0°, imaginary 90°, backward 180°, −90°)
+       or to an angle between them. Time stands still at ±90°, so those stops are kept short.
+     - Plane sources: each plane, on its own timer, picks from its menu: its own picture, one of the other
+       layers (MilkDrop A, Stream, MilkDrop B, Nested) or an add-in picture. At most two planes show add-in
+       pictures at once, to keep the frame rate up. A scene that sets src itself keeps its choice.
+     - 4D fractal dive: morphs to a new Julia c and glides the slice, twist and dive speed.
+     - Lorenz window, flow field equation, oscilloscope system and rate.
+     Numbers glide over a few seconds instead of jumping. Changing an operator by hand holds that one
+     operator for a full interval before it moves on by itself. */
+  const AUTO_GROUPS = [['time', 'Time compass'], ['planes', 'Plane sources'], ['dive', '4D fractal dive'], ['lorenz', 'Lorenz window'], ['flow', 'Flow field'], ['osc', 'Oscilloscope']];
+  const AUTO_GLIDE = 6000;
+  const HOLDS = { theta: 'time', phi: 'dive', dive: 'dive', twist: 'dive', c: 'dive', newDive: 'dive', span: 'lorenz', fsel: 'flow', osys: 'osc', orate: 'osc', kick: 'osc' };
+  const timers = {};          // 'time', 'plane0' … 'plane3', 'dive', 'lorenz', 'flow', 'osc' → when it next changes
+  const tweens = new Map();   // ui key → { from, to, end, t0, ms }
+  let cMix = null;            // Julia c on its way from one preset to the next
+  const smooth = (x) => x * x * (3 - 2 * x);
+  const pickOne = (list) => list[Math.floor(Math.random() * list.length)];
+  function weighted(pairs) {
+    let sum = 0;
+    for (const [, w] of pairs) sum += w;
+    let r = Math.random() * sum;
+    for (const [v, w] of pairs) if ((r -= w) < 0) return v;
+    return pairs[pairs.length - 1][0];
+  }
+  const wrapDeg = (d) => { const w = ((d + 180) % 360 + 360) % 360 - 180; return w === -180 ? 180 : w; };
+  const groupOf = (key) => (key.startsWith('plane') ? 'planes' : key);
+  const autoWait = () => ui.pace * (2 / 3 + Math.random() * 2 / 3) * 1000;
+  function timerKeys() {
+    const keys = [];
+    for (const [g] of AUTO_GROUPS) {
+      if (ui.autoOff.includes(g)) continue;
+      if (g === 'planes') ctx.PLANES.forEach((_, i) => keys.push('plane' + i));
+      else keys.push(g);
+    }
+    return keys;
+  }
+  const timerLabel = (key) => (key.startsWith('plane') ? `${ctx.PLANES[+key.slice(5)].label} plane picture` : AUTO_GROUPS.find(([g]) => g === key)[1]);
+  function glideTo(key, to, ms = AUTO_GLIDE) { tweens.set(key, { from: ui[key], to, end: to, t0: performance.now(), ms }); }
+  function cNow() {
+    const c = cPreset(ui.c);
+    if (!cMix) return [c[1], c[2]];
+    const k = smooth(clamp((performance.now() - cMix.t0) / cMix.ms, 0, 1));
+    return [cMix.from[0] + (c[1] - cMix.from[0]) * k, cMix.from[1] + (c[2] - cMix.from[1]) * k];
+  }
+  function holdOperator(k, v) {
+    // a hand change: stop gliding that value and give it a full interval before it moves by itself
+    const key = k === 'src' && Array.isArray(v) ? 'plane' + clamp(v[0] | 0, 0, 3) : HOLDS[k];
+    if (!key) return;
+    tweens.delete(k);
+    if (k === 'c') cMix = null;
+    if (k === 'theta') ui.theta = wrapDeg(ui.theta);
+    if (timers[key] !== undefined) timers[key] = performance.now() + autoWait();
+  }
+
+  const DIRECTIONS = [[0, 3], [180, 2], [90, 1], [-90, 1]];
+  function autoTime() {
+    const from = wrapDeg(ui.theta);
+    let to = 0;
+    for (let tries = 0; tries < 12; tries++) {
+      to = Math.random() < 0.7 ? weighted(DIRECTIONS) : Math.round((Math.random() * 360 - 180) / 5) * 5;
+      if (Math.abs(wrapDeg(to - from)) >= 20) break;
+    }
+    let d = wrapDeg(to - from);
+    if (Math.abs(d) === 180) d = Math.random() < 0.5 ? 180 : -180;   // half way round: either way
+    ui.theta = from;
+    tweens.set('theta', { from, to: from + d, end: wrapDeg(to), t0: performance.now(), ms: AUTO_GLIDE });
+    return Math.abs(Math.cos(to * DEG)) < 0.35 ? 0.4 : 1;   // near ±90° real time stops, so don't stay long
+  }
+  function autoPlane(i) {
+    const own = ctx.PLANES[i].key, cur = ui.src[i] || 0;
+    const busy = ui.src.filter((s, k) => k !== i && s >= 1 && s <= 8).length;
+    const opts = [[0, 8]];
+    for (const b of ctx.BUILTIN || []) if (b.key !== own) opts.push([b.id, 2]);
+    if (busy < 2) {
+      for (const id of [1, 2, 3, 4]) opts.push([id, 1.5]);
+      for (const id of [5, 6, 7, 8]) opts.push([id, 0.25]);
+    }
+    const choices = opts.filter(([id]) => id !== cur);
+    if (choices.length) ui.src[i] = weighted(choices);
+  }
+  function autoDive() {
+    const next = pickOne(C_PRESETS.map((p) => p[0]).filter((n) => n !== ui.c));
+    cMix = { from: cNow(), t0: performance.now(), ms: AUTO_GLIDE };
+    ui.c = next;
+    glideTo('phi', Math.random() < 0.35 ? pickOne([0, 90]) : Math.round(Math.random() * 180) / 2);
+    glideTo('twist', Math.round(Math.random() * 24) / 20);
+    glideTo('dive', Math.round((0.15 + Math.random() * 0.55) * 20) / 20);
+  }
+  function autoRun(now) {
+    let done = false;
+    for (const [key, t] of tweens) {
+      const x = clamp((now - t.t0) / t.ms, 0, 1);
+      ui[key] = x >= 1 ? t.end : t.from + (t.to - t.from) * smooth(x);
+      if (x >= 1) { tweens.delete(key); done = true; }
+    }
+    if (cMix && now - cMix.t0 >= cMix.ms) cMix = null;
+    let changed = false;
+    if (ui.auto) {
+      for (const key of timerKeys()) {
+        if (timers[key] === undefined) { timers[key] = now + autoWait(); continue; }
+        if (now < timers[key]) continue;
+        let dwell = 1;
+        if (key === 'time') dwell = autoTime();
+        else if (key.startsWith('plane')) autoPlane(+key.slice(5));
+        else if (key === 'dive') autoDive();
+        else if (key === 'lorenz') glideTo('span', Math.round((0.4 + Math.random() * 2.2) * 20) / 20);
+        else if (key === 'flow') ui.fsel = pickOne([0, 1, 2, 3].filter((f) => f !== ui.fsel));
+        else if (key === 'osc') { ui.osys = pickOne([0, 1, 2].filter((s) => s !== ui.osys)); glideTo('orate', Math.round((0.4 + Math.random() * 1.4) * 20) / 20); }
+        timers[key] = now + autoWait() * dwell;
+        changed = true;
+      }
+    }
+    if (done || changed) save();
+    if (sheetOpen() && (done || changed || (tweens.size && clockTick % 8 === 0))) syncUI();
+  }
+  function autoNext() {
+    if (!ui.auto) return null;
+    let best = null;
+    for (const key of timerKeys()) if (timers[key] !== undefined && (!best || timers[key] < timers[best])) best = key;
+    return best ? { label: timerLabel(best), inS: Math.max(0, Math.round((timers[best] - performance.now()) / 1000)) } : null;
+  }
+  function autoLine() {
+    if (!ui.auto) return 'Off: every operator stays where you put it.';
+    if (!timerKeys().length) return 'On, but every operator below is switched off.';
+    const n = autoNext();
+    return n ? `Next: ${n.label} in ${n.inS} s` : 'Starting…';
   }
 
   /* ---------------------------------------------------------------- the Dimensions sheet */
@@ -688,7 +831,15 @@ export function install(ctx) {
   const setRow = (r, v) => { if (document.activeElement !== r.input) { r.input.value = String(v); r.out.textContent = r.fmt(v); } };
 
   function set(k, v) {
-    if (k === 'theta') ui.theta = clamp(+v || 0, -180, 180);
+    holdOperator(k, v);
+    if (k === 'auto') { ui.auto = !!v; for (const key in timers) delete timers[key]; }
+    else if (k === 'pace') { ui.pace = clamp(Math.round(+v) || 30, 10, 120); for (const key in timers) delete timers[key]; }
+    else if (k === 'autoGroup' && Array.isArray(v) && AUTO_GROUPS.some(([g]) => g === v[0])) {
+      ui.autoOff = ui.autoOff.filter((g) => g !== v[0]);
+      if (!v[1]) ui.autoOff.push(v[0]);
+      for (const key in timers) if (groupOf(key) === v[0]) delete timers[key];
+    }
+    else if (k === 'theta') ui.theta = clamp(+v || 0, -180, 180);
     else if (k === 'phi') ui.phi = clamp(+v || 0, 0, 90);
     else if (k === 'dive') ui.dive = clamp(+v || 0, 0, 2);
     else if (k === 'twist') ui.twist = clamp(+v || 0, 0, 2);
@@ -707,6 +858,18 @@ export function install(ctx) {
   }
 
   if (sheet) {
+    refs.autoBtn = el('button', { className: 'key', type: 'button', id: 'dmAuto', title: 'Every operator below changes by itself (M)' });
+    refs.autoBtn.addEventListener('click', () => set('auto', !ui.auto));
+    refs.pace = row('dmPace', 'every ±⅓', 10, 120, 5, ui.pace, (v) => `${Math.round(v)} s`, (v) => set('pace', v));
+    refs.groupBtns = AUTO_GROUPS.map(([g, label]) => {
+      const b = el('button', { className: 'key', type: 'button', textContent: label });
+      b.dataset.group = g;
+      b.addEventListener('click', () => set('autoGroup', [g, ui.autoOff.includes(g)]));
+      return b;
+    });
+    refs.autoStatus = el('div', { className: 'status', id: 'dmAutoStatus' });
+    refs.autoStatus.setAttribute('role', 'status');
+
     refs.theta = row('dmTheta', 'angle θ', -180, 180, 1, ui.theta, (v) => `${Math.round(v)}°`, (v) => set('theta', v));
     refs.thetaSeg = seg('dmThetaSeg', [[0, 'Forward 0°'], [90, 'Imaginary 90°'], [180, 'Backward 180°'], [-90, '−90°']], (v) => set('theta', v), 'Time direction');
     refs.clock = el('div', { className: 'status', id: 'dmClock' });
@@ -735,6 +898,12 @@ export function install(ctx) {
     kickBtn.addEventListener('click', () => set('kick'));
 
     sheet.append(
+      sec('Auto dimensions',
+        el('div', { className: 'actions' }, refs.autoBtn),
+        el('div', { className: 'rows' }, refs.pace.wrap),
+        el('div', { className: 'actions', role: 'group', ariaLabel: 'Operators that change by themselves' }, ...refs.groupBtns),
+        refs.autoStatus,
+        hint('Each lit operator changes by itself on its own timer. The time compass glides between its four directions and the angles between them; each plane picks a new picture from its menu (its own, another layer or an add-in picture, two add-in pictures at most); the dive morphs to a new c; the rest pick new settings. Numbers glide, nothing jumps. Change one by hand and it holds for a full interval.')),
       sec('Time compass',
         el('div', { className: 'rows' }, refs.theta.wrap), refs.thetaSeg,
         hint('Every equation’s clock runs along t·e^(iθ). time is the real part and tim the imaginary part: 0° runs forward, 180° runs the scene backward, and at 90° real time stops while imaginary time flows. The camera block can steer it with theta, in radians.'),
@@ -758,7 +927,13 @@ export function install(ctx) {
 
   function syncUI() {
     if (!sheet) return;
-    setRow(refs.theta, ui.theta); mark(refs.thetaSeg, ui.theta);
+    refs.autoBtn.textContent = ui.auto ? 'Auto dimensions: on' : 'Auto dimensions: off';
+    refs.autoBtn.setAttribute('aria-pressed', String(ui.auto));
+    setRow(refs.pace, ui.pace);
+    for (const b of refs.groupBtns) b.setAttribute('aria-pressed', String(!ui.autoOff.includes(b.dataset.group)));
+    refs.autoStatus.textContent = autoLine();
+    const th = wrapDeg(ui.theta);
+    setRow(refs.theta, th); mark(refs.thetaSeg, th);
     const list = allSources();
     refs.srcSel.forEach(({ s }, i) => {
       if (s.options.length !== list.length) s.replaceChildren(...list.map((x) => el('option', { value: String(x.id), textContent: x.name })));
@@ -774,6 +949,7 @@ export function install(ctx) {
     const deg = Math.round(((live.theta / DEG) % 360 + 540) % 360 - 180);
     const steer = Math.abs(live.theta - ui.theta * DEG) > 1e-6 ? ` · the camera block is steering it to ${deg}°` : '';
     refs.clock.textContent = `time ${timeNow.toFixed(1)} · tim ${tim.toFixed(2)}${steer}`;
+    refs.autoStatus.textContent = autoLine();
     const z = jb.depth, e10 = z * Math.log10(2);
     const where = jb.mode === 'rise' ? 'rising back out' : live.jdive > 0 ? 'diving' : 'holding';
     refs.jbStatus.textContent = `${where} · zoom 2^${z.toFixed(1)} (about 10^${e10.toFixed(1)}) · ${jb.maxIt} iterations · slice ${((jb.phi / DEG) % 360).toFixed(1)}°`;
@@ -782,7 +958,9 @@ export function install(ctx) {
 
   function status() {
     return {
-      theta: ui.theta, phi: ui.phi, dive: ui.dive, twist: ui.twist, c: ui.c, osys: ui.osys, fsel: ui.fsel, src: [...ui.src],
+      theta: Math.round(wrapDeg(ui.theta)), phi: Math.round(ui.phi * 2) / 2, dive: Math.round(ui.dive * 100) / 100, twist: Math.round(ui.twist * 100) / 100,
+      c: ui.c, osys: ui.osys, fsel: ui.fsel, src: [...ui.src],
+      auto: ui.auto, pace: ui.pace, autoOff: [...ui.autoOff], autoGroups: AUTO_GROUPS, autoNext: autoNext(),
       depth: Math.round(jb.depth * 10) / 10, steering: Math.abs(live.theta - ui.theta * DEG) > 1e-6,
       sources: allSources().map((s) => [s.id, s.name]), cs: C_PRESETS.map((p) => p[0]), systems: SYSTEMS, flows: FLOWS,
     };
@@ -790,7 +968,8 @@ export function install(ctx) {
 
   return {
     get theta() { return live.theta; },
+    get autoOn() { return ui.auto; },
     step, fillInputs, camDefaults, fromCamera, planeSrc, source, render, set, status, syncUI,
-    debug: { jb, live, sc, lz, jbIterate, jbRender, jbRefs, toFix, fromFix, newDive },
+    debug: { jb, live, sc, lz, jbIterate, jbRender, jbRefs, toFix, fromFix, newDive, ui, timers, tweens },
   };
 }
