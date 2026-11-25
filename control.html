@@ -104,6 +104,8 @@ textarea {
     <div class="wordmark">nested dimensions<small>control</small></div>
     <div class="actions">
       <button class="primary" id="newWin" type="button">New visuals window</button>
+      <button id="hideAll" type="button">Hide controls in all windows</button>
+      <button id="showAll" type="button">Show controls in all windows</button>
       <button id="openAll" type="button" hidden>Reopen windows</button>
     </div>
   </header>
@@ -176,6 +178,8 @@ textarea {
     showBlocked(left);
   });
   $('newWin').addEventListener('click', () => { const wid = nextWid(); if (!openWindow(wid)) showBlocked([wid]); });
+  $('hideAll').addEventListener('click', () => send('*', 'bare', true));
+  $('showAll').addEventListener('click', () => send('*', 'bare', false));
   $('openAll').addEventListener('click', () => {
     const missing = load().filter((wid) => !liveWids().includes(wid));
     showBlocked(missing.filter((wid) => !openWindow(wid)));
@@ -214,7 +218,7 @@ textarea {
     c.meta = el('span', { className: 'meta' });
     c.chips = el('span', { className: 'actions' });
     const btn = (label, fn) => { const b = el('button', { type: 'button', textContent: label }); b.addEventListener('click', fn); return b; };
-    c.bare = btn('Hide HUD', () => send(sid, 'bare', !w.s.bare));
+    c.bare = btn('Hide controls', () => send(sid, 'bare', !w.s.bare));
     const head = el('div', { className: 'card-head' }, c.title, c.meta, c.chips,
       el('div', { className: 'actions' },
         btn('Show', () => { const ref = opened.get(w.s.wid); if (ref && !ref.closed) ref.focus(); else send(sid, 'focus'); }),
@@ -317,7 +321,7 @@ textarea {
     if (!s.visible) chips.push(['hidden: visuals paused', true]);
     if (s.audio.blocked) chips.push(['audio waiting for a click in that window', true]);
     c.chips.replaceChildren(...chips.map(([t, warn]) => el('span', { className: 'chip' + (warn ? ' warn' : ''), textContent: t })));
-    c.bare.textContent = s.bare ? 'Show HUD' : 'Hide HUD';
+    c.bare.textContent = s.bare ? 'Show controls' : 'Hide controls';
     if (c.scene.options.length !== s.scenes.length) c.scene.replaceChildren(...s.scenes.map((n) => el('option', { value: n, textContent: n })));
     if (document.activeElement !== c.scene) c.scene.value = s.scenes.includes(s.scene) ? s.scene : '';
     c.presets.textContent = `MilkDrop A · ${s.presets[0] || '—'}  ·  B · ${s.presets[1] || '—'}`;

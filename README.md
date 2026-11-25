@@ -26,7 +26,7 @@ By xik6 (William Victor Newbold).
 Open **Sources** and pick one:
 
 - **Archive radio** (the default). The page searches archive.org for the uploads of William Victor Newbold (about 580 audio items) and plays them at random, track after track. It favours tracks the device hasn't played yet and keeps that history between visits. Recordings longer than 20 minutes play an 8–14 minute stretch from a random point, so the 10-hour sessions turn up as excerpts. Type another creator name, or any archive.org search such as `collection:something`, into the Search box to play other uploads.
-- **My files.** Add files, or a whole folder on a computer. They play shuffled, each once before any repeats. Browsers can't keep files between visits, so the list empties on reload.
+- **My files.** Add files, or a whole folder on a computer. They play shuffled, each once before any repeats. A folder added with **Add folder** is remembered in Chrome and Edge and loads again on every visit; files added one by one are forgotten on reload.
 - **Live input.** Follows BlackHole or a mic for the visuals and never sends it to the speakers. If the device drops, the page reconnects within a few seconds. Once the browser has allowed the input, it reconnects by itself after a reload.
 
 How it keeps going:
@@ -62,7 +62,7 @@ The width and height come from the source's proportions, so a 4:3 video makes a 
 Open **Sources → Background**:
 
 - **Archive video** (the default) plays William Victor Newbold's videos from archive.org (about 60 items) behind the solids. Each is muted, plays a 1–2½ minute stretch from a random point, and crossfades into the next. Lighter files are chosen on phones. If a video won't load, the page tries the item's other servers and then moves on.
-- **My videos** does the same with your own video files.
+- **My videos** does the same with your own video files. Use **Video folder** to pick a folder of videos: Chrome and Edge remember it, and it loads again by itself every time the window opens or reloads. If Chrome asks again, press **Reconnect folders** (choosing "Allow on every visit" when Chrome offers it makes this automatic). Videos added one by one with **Add videos** are forgotten on reload. **Forget folders** clears the list. Each window remembers its own folders. If loading a remembered folder ever fails to finish, the next start waits for **Reconnect folders** instead of trying again by itself.
 - **Shader** is a slow generated nebula that swells with the bass. It also fills in while a video loads, or if archive.org can't be reached.
 - **Off** leaves it black.
 
@@ -77,7 +77,7 @@ Open **control.html** (the **Control panel** button or the **C** key in any visu
 - **Background:** Archive video, Videos, Shader or Off, the next clip, the level, and adding videos.
 - **Inputs:** camera on or off, connect MIDI.
 - **Equations:** the full editor for the window you pick, with the same error messages as in the window.
-- **Window:** **Show** brings it to the front, even out of a fullscreen Space. **Fill screen** makes it cover its display while it stays on the normal desktop. **Hide HUD** hides its controls for a clean capture. **Reload** and **Close** do what they say.
+- **Window:** **Show** brings it to the front, even out of a fullscreen Space. **Fill screen** makes it cover its display while it stays on the normal desktop. **Hide controls** hides its on-screen controls for a clean picture; **Hide controls in all windows** and **Show controls in all windows** at the top do every window at once. Windows opened from the panel start with their controls hidden, keep them hidden after a reload, and ignore clicks on the picture; press **H** in the window or **Show controls** in the panel to bring them back. **Reload** and **Close** do what they say.
 
 **New visuals window** opens another one (`?w=2`, `?w=3` …). Each window keeps its own scene, sources, levels and equation edits, and its title is "Nested Dimensions 2" and so on, so OBS can capture each one separately. New windows start with their sound at 0%: they still react to their own radio, but only window 1 is heard until you turn one up.
 

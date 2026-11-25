@@ -178,7 +178,7 @@ input[type="text"]::placeholder { color: var(--dim); opacity: 0.8; }
 
 <header class="mast" id="mast">
   <div class="plate ident">
-    <div class="wordmark">nested dimensions<small id="verTag">v0.6</small></div>
+    <div class="wordmark">nested dimensions<small id="verTag">v0.7</small></div>
     <div class="readout"><b id="sceneLabel">orbit</b> · <span id="fpsLabel">-- fps</span> · <span id="audioLabel">no audio</span></div>
     <div class="now" id="nowLine" hidden><b>♪</b><span id="nowTitle"></span></div>
     <div class="presets">
@@ -250,7 +250,8 @@ input[type="text"]::placeholder { color: var(--dim); opacity: 0.8; }
         <div class="status" id="iaStatus" role="status"></div>
       </div>
       <div class="opts" id="filesOpts" hidden>
-        <div class="actions"><button class="key" id="filesAdd" type="button">Add files</button><button class="key" id="folderAdd" type="button">Add folder</button><button class="key" id="filesClear" type="button">Clear list</button></div>
+        <div class="actions"><button class="key" id="filesAdd" type="button">Add files</button><button class="key" id="folderAdd" type="button">Add folder</button><button class="key primary" id="audioReconnect" type="button" hidden>Reconnect folders</button><button class="key" id="audioForget" type="button" hidden>Forget folders</button><button class="key" id="filesClear" type="button">Clear list</button></div>
+        <div class="status" id="audioFolders"></div>
         <div class="status" id="filesStatus" role="status"></div>
       </div>
       <div class="opts" id="liveOpts" hidden>
@@ -282,7 +283,8 @@ input[type="text"]::placeholder { color: var(--dim); opacity: 0.8; }
         <label class="row" for="bgLevel"><span>level</span><input type="range" id="bgLevel" min="0" max="1" step="0.01" value="0.8"><output id="bgLevelOut" for="bgLevel">80%</output></label>
       </div>
       <div class="np" id="bgNow" hidden><div><span class="n">▸</span><a class="t" target="_blank" rel="noopener"></a><span class="tm"></span></div></div>
-      <div class="actions"><button class="key" id="bgNext" type="button">Next clip</button><button class="key" id="bgAdd" type="button">Add videos</button></div>
+      <div class="actions"><button class="key" id="bgNext" type="button">Next clip</button><button class="key" id="bgAdd" type="button">Add videos</button><button class="key" id="bgFolder" type="button" hidden>Video folder</button><button class="key primary" id="bgReconnect" type="button" hidden>Reconnect folders</button><button class="key" id="bgForget" type="button" hidden>Forget folders</button></div>
+      <div class="status" id="bgFolders"></div>
     </div>
     <div class="sec">
       <h3>Stream plane</h3>
@@ -2290,7 +2292,7 @@ function setBgMode(mode, user) {
   bgTick();
 }
 function setBgNote(msg) { bg.note = msg; refreshBgUI(); }
-function addBgFiles(list) {
+function addBgFiles(list, restoring) {
   const fresh = [...list].filter((f) => (f.type && f.type.startsWith('video/')) || /\.(mp4|m4v|mov|webm)$/i.test(f.name));
   if (!fresh.length) { toast('None of those are videos this page can play. MP4 (H.264) works everywhere.'); return; }
   for (const f of fresh) {
@@ -2299,7 +2301,7 @@ function addBgFiles(list) {
     bg.files.push({ key, url: URL.createObjectURL(f), title: f.name.replace(/\.[^.]+$/, ''), album: '', link: '', length: 0, cors: false, item: key });
   }
   bg.bag = [];
-  if (bg.mode !== 'files') setBgMode('files', false);
+  if (bg.mode !== 'files' && !restoring) setBgMode('files', false);
   else { bg.idleUntil = 0; bgTick(); refreshBgUI(); }
   toast(`${bg.files.length} background video${bg.files.length === 1 ? '' : 's'}.`, 2200);
 }
@@ -2334,7 +2336,7 @@ function bgFrame(dt) {
 }
 const BG_HINTS = {
   archive: 'William Victor Newbold’s videos from archive.org fill the dark space behind the solids, muted, a 1–2½ minute stretch of each, crossfading nonstop. The shader fills in while a video loads.',
-  files: 'Your videos fill the dark space, muted, shuffled and crossfading. Files stay listed until you reload the page.',
+  files: 'Your videos fill the dark space, muted, shuffled and crossfading. Videos added one by one are forgotten on reload; a folder chosen with Video folder is remembered and loads again every time.',
   shader: 'A slow generated nebula fills the dark space and swells with the bass.',
   off: 'Black behind the solids.',
 };
@@ -2513,7 +2515,7 @@ function audioLabelText() {
 function refreshFilesStatus() {
   const n = engine.files.length;
   $('filesStatus').textContent = n
-    ? `${n} file${n === 1 ? '' : 's'}, shuffled. Each plays once before any repeats. Files stay listed until you reload the page.`
+    ? `${n} file${n === 1 ? '' : 's'}, shuffled. Each plays once before any repeats. Files added one by one are forgotten on reload; a folder added with Add folder is remembered.`
     : 'No files yet. Add some and they play shuffled and crossfaded, nonstop.';
 }
 function refreshAudioUI() {
@@ -2571,7 +2573,7 @@ function renderNowLine() {
   $('nowLine').hidden = !show;
   if (show && $('nowTitle').textContent !== t.info.title) $('nowTitle').textContent = t.info.title;
 }
-function addFiles(list) {
+function addFiles(list, restoring) {
   const ok = /\.(mp3|wav|flac|ogg|oga|m4a|aac|aif|aiff|opus|webm)$/i;
   const fresh = [...list].filter((f) => (f.type && f.type.startsWith('audio/')) || ok.test(f.name));
   if (!fresh.length) { toast('None of those are audio files this page can play. MP3, WAV, FLAC, OGG and M4A work.'); return; }
@@ -2581,7 +2583,7 @@ function addFiles(list) {
     engine.files.push({ key, url: URL.createObjectURL(f), title: f.name.replace(/\.[^.]+$/, ''), album: '', artist: '', link: '', length: 0, cors: false });
   }
   engine.bag = [];
-  if (engine.mode !== 'files') setMode('files', true);
+  if (engine.mode !== 'files' && !restoring) setMode('files', true);
   else { for (const l of engine.lanes) { l.idleUntil = 0; l.tick(); } refreshAudioUI(); }
   toast(`${engine.files.length} file${engine.files.length === 1 ? '' : 's'} in the list.`, 2200);
 }
@@ -2593,9 +2595,147 @@ function clearFiles() {
   refreshAudioUI();
 }
 
+/* ------------------------------------------------------------------ remembered folders (Chrome, Edge)
+   A folder chosen with Video folder or Add folder is kept in this browser, per window. On every visit its
+   videos or audio files load again by themselves when the browser still allows it, or after one click on
+   Reconnect folders when it asks again. Files added one by one can't be kept: browsers forget them. */
+const CAN_FOLDERS = 'showDirectoryPicker' in window && 'indexedDB' in window;
+const VIDEO_RE = /\.(mp4|m4v|mov|webm)$/i, AUDIO_RE = /\.(mp3|wav|flac|ogg|oga|m4a|aac|aif|aiff|opus)$/i;
+const folderDb = {
+  p: null,
+  open() {
+    return this.p || (this.p = new Promise((res, rej) => {
+      const r = indexedDB.open('nd-folders', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('folders');
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    }));
+  },
+  async get(key) {
+    const db = await this.open();
+    return new Promise((res, rej) => { const q = db.transaction('folders').objectStore('folders').get(key); q.onsuccess = () => res(q.result || []); q.onerror = () => rej(q.error); });
+  },
+  async set(key, list) {
+    const db = await this.open();
+    return new Promise((res, rej) => { const t = db.transaction('folders', 'readwrite'); t.objectStore('folders').put(list, key); t.oncomplete = () => res(); t.onerror = () => rej(t.error); });
+  },
+};
+const FOLDERS = {
+  bg: { key: 'bg' + NS, test: (n) => VIDEO_RE.test(n), noun: 'videos', add: (files, restoring) => addBgFiles(files, restoring), handles: [], waiting: [] },
+  audio: { key: 'audio' + NS, test: (n) => AUDIO_RE.test(n), noun: 'audio files', add: (files, restoring) => addFiles(files, restoring), handles: [], waiting: [] },
+};
+async function readFolder(dir, test, depth = 0, out = []) {
+  for await (const entry of dir.values()) {
+    if (out.length >= 5000) break;
+    if (entry.kind === 'file' && test(entry.name)) { try { out.push(await entry.getFile()); } catch (e) { /* unreadable file */ } }
+    else if (entry.kind === 'directory' && depth < 4 && !entry.name.startsWith('.')) await readFolder(entry, test, depth + 1, out);
+  }
+  return out;
+}
+async function loadFolder(kind, dir, restoring) {
+  const F = FOLDERS[kind];
+  let files = [];
+  try { files = await readFolder(dir, F.test); } catch (e) { toast(`${dir.name} couldn’t be read (${e.message}).`); return; }
+  if (!files.length) { toast(`${dir.name} has no ${F.noun} this page can play.`); return; }
+  F.add(files, restoring);
+}
+async function chooseFolder(kind) {
+  const F = FOLDERS[kind];
+  let dir;
+  try { dir = await window.showDirectoryPicker({ id: 'nd-' + kind, mode: 'read' }); } catch (e) { return; }   // cancelled
+  for (const h of F.handles) { try { if (await h.isSameEntry(dir)) { toast(`${dir.name} is already remembered.`, 2500); return; } } catch (e) { /* keep going */ } }
+  F.handles.push(dir);
+  try { await folderDb.set(F.key, F.handles); } catch (e) { toast('This browser couldn’t remember the folder, so it loads only until you reload.'); }
+  await loadFolder(kind, dir, false);
+  refreshFolderUI();
+}
+// If loading the remembered folders ever fails to finish (the window closed or crashed part-way), the
+// next start doesn't try again by itself: it shows Reconnect folders instead, so a window can't get stuck
+// reopening and closing.
+const RESTORE_KEY = 'nd.folders.restoring' + NS;
+let folderHeld = false;
+async function restoreFolders(manual) {
+  if (!CAN_FOLDERS) return;
+  if (!manual) {
+    let last = 0;
+    try { last = Number(localStorage.getItem(RESTORE_KEY)) || 0; } catch (e) { last = 0; }
+    if (last && Date.now() - last < 10 * 60e3) {
+      folderHeld = true;
+      try { localStorage.removeItem(RESTORE_KEY); } catch (e) { /* storage off */ }
+      refreshFolderUI();
+      toast('Your remembered folders didn’t finish loading last time, so they wait for you: open Sources and press Reconnect folders.', 9000);
+      return;
+    }
+  }
+  folderHeld = false;
+  try { localStorage.setItem(RESTORE_KEY, String(Date.now())); } catch (e) { /* storage off */ }
+  try {
+    for (const kind of Object.keys(FOLDERS)) {
+      const F = FOLDERS[kind];
+      try { F.handles = await folderDb.get(F.key); } catch (e) { F.handles = []; }
+      F.waiting = [];
+      for (const h of F.handles) {
+        let st = 'prompt';
+        try { st = await h.queryPermission({ mode: 'read' }); } catch (e) { /* treat as prompt */ }
+        if (st !== 'granted' && manual) { try { st = await h.requestPermission({ mode: 'read' }); } catch (e) { /* still waiting */ } }
+        if (st === 'granted') await loadFolder(kind, h, true);
+        else F.waiting.push(h);
+      }
+    }
+  } finally {
+    try { localStorage.removeItem(RESTORE_KEY); } catch (e) { /* storage off */ }
+  }
+  refreshFolderUI();
+  if (!manual && (FOLDERS.bg.waiting.length || FOLDERS.audio.waiting.length)) {
+    toast('Your remembered folders need one click: open Sources and press Reconnect folders.', 9000);
+  }
+}
+function reconnectFolders() {
+  if (folderHeld) { restoreFolders(true).catch((e) => console.error('remembered folders:', e)); return; }
+  // ask for every waiting folder straight away, inside the click, then load what was allowed
+  const asks = [];
+  for (const kind of Object.keys(FOLDERS)) {
+    for (const h of FOLDERS[kind].waiting) asks.push([kind, h, h.requestPermission({ mode: 'read' }).catch(() => 'denied')]);
+  }
+  Promise.all(asks.map((a) => a[2])).then(async (states) => {
+    for (const F of Object.values(FOLDERS)) F.waiting = [];
+    for (let k = 0; k < asks.length; k++) {
+      const [kind, h] = asks[k];
+      if (states[k] === 'granted') await loadFolder(kind, h, true);
+      else FOLDERS[kind].waiting.push(h);
+    }
+    refreshFolderUI();
+  });
+}
+async function forgetFolders(kind) {
+  const F = FOLDERS[kind];
+  F.handles = []; F.waiting = [];
+  try { await folderDb.set(F.key, []); } catch (e) { /* nothing stored */ }
+  refreshFolderUI();
+  toast(`Forgot the remembered ${kind === 'bg' ? 'video' : 'audio'} folders. Files already loaded stay until you reload.`, 3500);
+}
+function refreshFolderUI() {
+  for (const [kind, ids] of [['bg', ['bgFolders', 'bgReconnect', 'bgForget']], ['audio', ['audioFolders', 'audioReconnect', 'audioForget']]]) {
+    const F = FOLDERS[kind], names = F.handles.map((h) => h.name);
+    $(ids[0]).textContent = folderHeld
+      ? 'Remembered folders are waiting: press Reconnect folders to load them.'
+      : names.length
+        ? `Remembered ${names.length === 1 ? 'folder' : 'folders'}: ${names.join(', ')}${F.waiting.length ? ' · press Reconnect folders to load again' : ' · loads again on every visit'}`
+        : '';
+    $(ids[1]).hidden = !(F.waiting.length || folderHeld);
+    $(ids[2]).hidden = !names.length;
+  }
+  $('bgFolder').hidden = !CAN_FOLDERS;
+}
+
 /* ------------------------------------------------------------------ controls */
 let bare = false, bareHintShown = false;
-function setBare(on) {
+// Windows opened from the control panel are driven from there: their controls start hidden, stay hidden
+// across reloads, and a click on the picture doesn't bring them back (H does, or Show controls in the panel).
+const FROM_PANEL = /^nd-w-/.test(window.name || '');
+function setBare(on, quiet) {
+  if (!!on !== !!prefs.bare) { prefs.bare = !!on; savePrefs(); }
+  if (on && (quiet || FROM_PANEL)) bareHintShown = true;
   bare = on;
   $('mast').hidden = on;
   $('dock').hidden = on;
@@ -2617,7 +2757,7 @@ async function toggleFullscreen() {
   } catch (e) { toast('Fullscreen isn’t available here. Use the browser’s own fullscreen instead.'); }
 }
 if (document.fullscreenEnabled) $('btnFull').hidden = false;
-if (coarse || !('webkitdirectory' in document.createElement('input'))) $('folderAdd').hidden = true;
+if (coarse || (!CAN_FOLDERS && !('webkitdirectory' in document.createElement('input')))) $('folderAdd').hidden = true;
 
 $('btnStart').addEventListener('click', unlockAudio);
 $('btnScene').addEventListener('click', nextScene);
@@ -2651,7 +2791,9 @@ function applyQuery() {
 $('iaApply').addEventListener('click', applyQuery);
 $('iaQuery').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); applyQuery(); } });
 $('filesAdd').addEventListener('click', () => $('fileAudio').click());
-$('folderAdd').addEventListener('click', () => $('fileFolder').click());
+$('folderAdd').addEventListener('click', () => { if (CAN_FOLDERS) chooseFolder('audio'); else $('fileFolder').click(); });
+$('audioReconnect').addEventListener('click', reconnectFolders);
+$('audioForget').addEventListener('click', () => forgetFolders('audio'));
 $('filesClear').addEventListener('click', clearFiles);
 for (const id of ['fileAudio', 'fileFolder']) {
   $(id).addEventListener('change', (e) => {
@@ -2724,6 +2866,9 @@ $('bgLevel').addEventListener('input', () => {
 });
 $('bgNext').addEventListener('click', () => { bg.skip = true; bg.idleUntil = 0; bgTick(); });
 $('bgAdd').addEventListener('click', () => $('fileBg').click());
+$('bgFolder').addEventListener('click', () => chooseFolder('bg'));
+$('bgReconnect').addEventListener('click', reconnectFolders);
+$('bgForget').addEventListener('click', () => forgetFolders('bg'));
 $('fileBg').addEventListener('change', (e) => {
   const files = e.target.files ? [...e.target.files] : [];
   e.target.value = '';
@@ -2734,7 +2879,7 @@ $('btnEq').addEventListener('click', () => toggleSheet('eqSheet'));
 $('btnDim').addEventListener('click', () => toggleSheet('dimSheet'));
 $('btnHide').addEventListener('click', () => setBare(true));
 $('btnFull').addEventListener('click', toggleFullscreen);
-$('stage').addEventListener('click', () => { if (bare) setBare(false); });
+$('stage').addEventListener('click', () => { if (bare && !FROM_PANEL) setBare(false); });
 $('eqApply').addEventListener('click', applyEditor);
 $('eqRevert').addEventListener('click', revertEditor);
 $('sceneCopy').addEventListener('click', () => {
@@ -2876,18 +3021,20 @@ async function bootSources() {
     const s = await permState('microphone');
     setMode('live', false, s === 'granted');
   } else setMode('radio', false);     // first visit, or radio last time
+  restoreFolders().catch((e) => console.error('remembered folders:', e));
   if (prefs.video === 'camera' && (await permState('camera')) === 'granted') startCamera(false);
   if (prefs.midi && navigator.requestMIDIAccess && (await permState('midi')) === 'granted') startMidi(false);
 }
 refreshAudioUI();
 bootSources();
+if (prefs.bare ?? FROM_PANEL) setBare(true, true);   // controls stay hidden in windows run from the panel
 
 /* ------------------------------------------------------------------ remote control (GitHub Pages build)
    The control panel (control.html) and every visuals window talk over a BroadcastChannel, so any window
    can be edited from the panel, even one sitting fullscreen in its own Space. */
 const SID = Math.random().toString(36).slice(2, 10);
 let remote = null;
-if (WID !== '1') $('verTag').textContent = `v0.6 · window ${WID}`;
+if (WID !== '1') $('verTag').textContent = `v0.7 · window ${WID}`;
 function remoteStatus() {
   const t = engine.lastStarted && engine.lastStarted.lane.cur === engine.lastStarted ? engine.lastStarted : null;
   const clip = bg.fading && bg.b ? bg.b : bg.a;
