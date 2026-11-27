@@ -97,7 +97,7 @@ Every operator below changes by itself, each on its own timer, about every 30 se
 | operator | what changes |
 |---|---|
 | Time compass | glides over 6 s to one of its four directions (forward 0°, imaginary 90°, backward 180°, −90°) or to an angle between them. Real time stands still at ±90°, so it doesn't stay there long. |
-| Plane sources | each of the four planes, on its own timer, picks from its menu: its own picture, one of the other layers (MilkDrop A, Stream, MilkDrop B, Nested) or an add-in picture. Its own picture comes up most often, and at most two planes show add-in pictures at once, which keeps the frame rate up. The plane fades out, changes and fades back in. |
+| Plane sources | each of the four planes, on its own timer, picks from its menu: its own picture, one of the other layers (MilkDrop A, Stream, MilkDrop B, Nested) or the 4D dive, Lorenz or flow field picture. Its own picture comes up most often, and at most two planes show those add-in pictures at once, which keeps the frame rate up. The oscilloscope boxes are left out of the mix; you can still put them on a plane by hand. The plane fades out, changes and fades back in. |
 | 4D fractal dive | morphs to another Julia c, and glides the slice, twist and dive speed |
 | Lorenz window | glides to a new window |
 | Flow field | switches to another of its four equations |
@@ -164,7 +164,7 @@ Four complex variables, w, x, y and z, each drawn in its own complex plane:
 ### The two scenes
 
 - **dimensions:** the fractal dive, Lorenz in complex time and the flow field orbit the nested screen, pushed around by the oscilloscope's values.
-- **oscilloscope:** w, x, y and z, each on its own solid, each moved by its own value.
+- **oscilloscope:** w, x, y and z, each on its own solid, each moved by its own value. Auto scenes and Next scene skip it; pick it from the scene menu on the control panel to see it.
 
 The control panel has the same controls for each window under **Dimensions**.
 

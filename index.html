@@ -178,7 +178,7 @@ input[type="text"]::placeholder { color: var(--dim); opacity: 0.8; }
 
 <header class="mast" id="mast">
   <div class="plate ident">
-    <div class="wordmark">nested dimensions<small id="verTag">v0.8</small></div>
+    <div class="wordmark">nested dimensions<small id="verTag">v0.8.1</small></div>
     <div class="readout"><b id="sceneLabel">orbit</b> · <span id="fpsLabel">-- fps</span> · <span id="audioLabel">no audio</span></div>
     <div class="now" id="nowLine" hidden><b>♪</b><span id="nowTitle"></span></div>
     <div class="presets">
@@ -1928,8 +1928,13 @@ function loadScene(sc) {
   refreshEditor();
   scheduleAuto();                        // any scene change, by hand or automatic, starts a fresh interval
 }
+// Scenes left out of the mix: Auto scenes and Next scene skip them; the control panel's scene menu still has them.
+const OUT_OF_MIX = new Set(['oscilloscope']);
+const inMix = (k) => !OUT_OF_MIX.has(SCENES[k] && SCENES[k].name);
 function nextScene() {
-  state.sceneIndex = (Math.max(state.sceneIndex, -1) + 1) % SCENES.length;
+  let k = Math.max(state.sceneIndex, -1);
+  for (let n = 0; n < SCENES.length; n++) { k = (k + 1) % SCENES.length; if (inMix(k)) break; }
+  state.sceneIndex = k;
   loadScene(SCENES[state.sceneIndex]);
   try { localStorage.setItem('nd.scene.v1' + NS, String(state.sceneIndex)); } catch (e) { /* storage off */ }
 }
@@ -2039,7 +2044,9 @@ const autoWait = () => (AUTO_EVERY - AUTO_JITTER + Math.random() * 2 * AUTO_JITT
 function scheduleAuto() { auto.due = performance.now() + autoWait(); }
 function randomScene() {
   const others = SCENES.map((_, k) => k).filter((k) => k !== state.sceneIndex);
-  const k = others[Math.floor(Math.random() * others.length)];
+  const mixed = others.filter(inMix);
+  const pool = mixed.length ? mixed : others;
+  const k = pool[Math.floor(Math.random() * pool.length)];
   state.sceneIndex = k - 1;
   nextScene();
 }
@@ -3060,7 +3067,7 @@ if (prefs.bare ?? FROM_PANEL) setBare(true, true);   // controls stay hidden in 
    can be edited from the panel, even one sitting fullscreen in its own Space. */
 const SID = Math.random().toString(36).slice(2, 10);
 let remote = null;
-if (WID !== '1') $('verTag').textContent = `v0.8 · window ${WID}`;
+if (WID !== '1') $('verTag').textContent = `v0.8.1 · window ${WID}`;
 function remoteStatus() {
   const t = engine.lastStarted && engine.lastStarted.lane.cur === engine.lastStarted ? engine.lastStarted : null;
   const clip = bg.fading && bg.b ? bg.b : bg.a;
@@ -3172,7 +3179,7 @@ function addinFailed(e) {
   if (!$('dimSheet').hidden) toggleSheet('dimSheet');
   toast(`The Dimensions add-ins stopped (${e && e.message ? e.message : e}). Everything else keeps running.`, 8000);
 }
-import('./addins.js?v=6').then((m) => {
+import('./addins.js?v=7').then((m) => {
   ADD = m.install({
     THREE, renderer, coarse, $, toast, NS, FULL_GEO, FULL_VS, blitCam,
     PLANES: PLANE_KEYS.map((key) => ({ key, label: labelOf(key) })),

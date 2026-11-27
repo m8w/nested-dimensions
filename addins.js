@@ -212,6 +212,7 @@ export function install(ctx) {
   try { ui = { ...DEF, ...(JSON.parse(localStorage.getItem(PREF_KEY) || '{}') || {}) }; } catch (e) { ui = { ...DEF }; }
   if (!Array.isArray(ui.src) || ui.src.length !== 4) ui.src = [0, 0, 0, 0];
   if (!Array.isArray(ui.autoOff)) ui.autoOff = [];
+  if (!(ui.mix >= 2)) { ui.src = ui.src.map((s) => (s >= 4 && s <= 8 ? 0 : s)); ui.mix = 2; }   // v0.8.1: oscilloscope out of the mix
   ui.pace = clamp(Math.round(+ui.pace) || 30, 10, 120);
   ui.auto = !!ui.auto;
   const save = () => {
@@ -675,8 +676,8 @@ export function install(ctx) {
      - Time compass: glides to one of its four directions (forward 0°, imaginary 90°, backward 180°, −90°)
        or to an angle between them. Time stands still at ±90°, so those stops are kept short.
      - Plane sources: each plane, on its own timer, picks from its menu: its own picture, one of the other
-       layers (MilkDrop A, Stream, MilkDrop B, Nested) or an add-in picture. At most two planes show add-in
-       pictures at once, to keep the frame rate up. A scene that sets src itself keeps its choice.
+       layers (MilkDrop A, Stream, MilkDrop B, Nested) or the dive, Lorenz or flow field picture (never the
+       oscilloscope boxes). At most two planes show those at once, to keep the frame rate up. A scene that sets src itself keeps its choice.
      - 4D fractal dive: morphs to a new Julia c and glides the slice, twist and dive speed.
      - Lorenz window, flow field equation, oscilloscope system and rate.
      Numbers glide over a few seconds instead of jumping. Changing an operator by hand holds that one
@@ -745,10 +746,8 @@ export function install(ctx) {
     const busy = ui.src.filter((s, k) => k !== i && s >= 1 && s <= 8).length;
     const opts = [[0, 8]];
     for (const b of ctx.BUILTIN || []) if (b.key !== own) opts.push([b.id, 2]);
-    if (busy < 2) {
-      for (const id of [1, 2, 3, 4]) opts.push([id, 1.5]);
-      for (const id of [5, 6, 7, 8]) opts.push([id, 0.25]);
-    }
+    // the oscilloscope pictures (4 – 8) are left out of the mix; they can still be picked by hand
+    if (busy < 2) for (const id of [1, 2, 3]) opts.push([id, 1.5]);
     const choices = opts.filter(([id]) => id !== cur);
     if (choices.length) ui.src[i] = weighted(choices);
   }
@@ -903,7 +902,7 @@ export function install(ctx) {
         el('div', { className: 'rows' }, refs.pace.wrap),
         el('div', { className: 'actions', role: 'group', ariaLabel: 'Operators that change by themselves' }, ...refs.groupBtns),
         refs.autoStatus,
-        hint('Each lit operator changes by itself on its own timer. The time compass glides between its four directions and the angles between them; each plane picks a new picture from its menu (its own, another layer or an add-in picture, two add-in pictures at most); the dive morphs to a new c; the rest pick new settings. Numbers glide, nothing jumps. Change one by hand and it holds for a full interval.')),
+        hint('Each lit operator changes by itself on its own timer. The time compass glides between its four directions and the angles between them; each plane picks a new picture from its menu (its own, another layer, or the dive, Lorenz or flow field, two of those at most; never the oscilloscope); the dive morphs to a new c; the rest pick new settings. Numbers glide, nothing jumps. Change one by hand and it holds for a full interval.')),
       sec('Time compass',
         el('div', { className: 'rows' }, refs.theta.wrap), refs.thetaSeg,
         hint('Every equation’s clock runs along t·e^(iθ). time is the real part and tim the imaginary part: 0° runs forward, 180° runs the scene backward, and at 90° real time stops while imaginary time flows. The camera block can steer it with theta, in radians.'),
